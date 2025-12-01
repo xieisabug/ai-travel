@@ -13,6 +13,33 @@
     "enabled": true
   },
   /**
+   * KV Namespaces
+   * 用于存储世界、旅游项目、会话等数据
+   * 创建命令: wrangler kv:namespace create "AI_TRAVEL_KV"
+   */
+  "kv_namespaces": [
+    {
+      "binding": "AI_TRAVEL_KV",
+      "id": "9358261fe52f4761839f259ca0422961"
+    }
+  ],
+  /**
+   * R2 Buckets (用于存储生成的图片)
+   * 创建命令: wrangler r2 bucket create ai-travel-images
+   */
+  // "r2_buckets": [
+  //   {
+  //     "binding": "IMAGES_BUCKET",
+  //     "bucket_name": "ai-travel-images"
+  //   }
+  // ],
+  /**
+   * AI Binding (用于 Cloudflare Workers AI)
+   */
+  // "ai": {
+  //   "binding": "AI"
+  // },
+  /**
    * Smart Placement
    * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
    */
@@ -30,6 +57,7 @@
   // "vars": { "MY_VARIABLE": "production_value" },
   /**
    * Note: Use secrets to store sensitive data.
+   * 设置 OpenAI API Key: wrangler secret put OPENAI_API_KEY
    * https://developers.cloudflare.com/workers/configuration/secrets/
    */
   /**

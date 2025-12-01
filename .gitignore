@@ -11,3 +11,10 @@
 .wrangler
 .dev.vars*
 
+# Environment
+.env
+.env.local
+
+# Data
+/data/
+

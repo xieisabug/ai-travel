@@ -19,6 +19,48 @@ export type {
 
 export { MockAIProvider } from './mock-provider';
 
+// 新增：AI 生成函数
+export {
+    ai_generate,
+    ai_generate_world,
+    ai_generate_travel_projects,
+    ai_generate_spots,
+    ai_generate_npc,
+    ai_generate_dialog,
+    ai_generate_text,
+    type AIGenerateConfig,
+    type GenerateOptions,
+    type GenerateResult,
+} from './generate';
+
+// 新增：图片生成函数
+export {
+    image_generate,
+    image_generate_batch,
+    image_generate_world_cover,
+    image_generate_spot,
+    image_generate_npc_portrait,
+    image_generate_project_cover,
+    imageGenerator,
+    buildWorldCoverPrompt,
+    buildSpotImagePrompt,
+    buildNPCPortraitPrompt,
+    buildProjectCoverPrompt,
+    getPlaceholderImage,
+    type ImageGenerateConfig,
+    type ImageGenerateOptions,
+    type ImageGenerateResult,
+} from './image-generate';
+
+// 新增：世界生成服务
+export {
+    WorldGenerationService,
+    createWorldService,
+    getWorldService,
+    setWorldService,
+    type WorldServiceConfig,
+} from './world-service';
+
 import type { IAIContentProvider, AIProviderType, AIProviderConfig } from './types';
 import { MockAIProvider } from './mock-provider';
 

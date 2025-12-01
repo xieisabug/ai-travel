@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import type { GameState, GameSave, CreateSaveParams } from '~/types/game';
 import { GameEngine, getDefaultEngine, type GameAction } from '~/lib/game-engine';
 

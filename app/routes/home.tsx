@@ -1,15 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router';
-import type { Route } from "./+types/home";
+import { useNavigate } from 'react-router-dom';
 import { getDefaultStorage } from '~/lib/storage';
 import type { GameSave } from '~/types/game';
-
-export function meta({ }: Route.MetaArgs) {
-  return [
-    { title: "AI 虚拟旅行 - 星月岛之旅" },
-    { name: "description", content: "体验一场AI生成的虚拟旅行冒险" },
-  ];
-}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -99,13 +91,21 @@ export default function Home() {
 
         {/* 按钮区域 */}
         <div className="space-y-4 w-80 mx-auto">
-          {/* 新游戏区域 */}
+          {/* 探索 AI 世界入口 */}
+          <button
+            onClick={() => navigate('/worlds')}
+            className="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-lg font-semibold rounded-xl shadow-lg shadow-emerald-500/30 transition-all duration-300 hover:scale-105"
+          >
+            🌍 探索 AI 异世界
+          </button>
+
+          {/* 新游戏区域（经典模式） */}
           {!showNewGame ? (
             <button
               onClick={() => setShowNewGame(true)}
               className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-lg font-semibold rounded-xl shadow-lg shadow-purple-500/30 transition-all duration-300 hover:scale-105"
             >
-              🚀 开始新旅程
+              🚀 经典模式：星月岛之旅
             </button>
           ) : (
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">

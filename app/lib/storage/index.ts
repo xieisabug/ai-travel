@@ -12,15 +12,18 @@ export type {
 } from './types';
 
 export { LocalStorageProvider } from './local-storage';
+export { CloudflareKVProvider, type KVNamespace, type IExtendedStorageProvider } from './cloudflare-kv';
 
 import type { IStorageProvider, StorageProviderType, StorageConfig } from './types';
 import { LocalStorageProvider } from './local-storage';
+import { CloudflareKVProvider, type KVNamespace } from './cloudflare-kv';
 
 /**
  * 创建存储提供者实例
  * 
  * @param type 存储类型
  * @param config 存储配置
+ * @param kv Cloudflare KV 命名空间（仅 cloudflareKV 类型需要）
  * @returns 存储提供者实例
  * 
  * @example
@@ -28,22 +31,25 @@ import { LocalStorageProvider } from './local-storage';
  * // 使用 LocalStorage
  * const storage = createStorageProvider('localStorage');
  * 
- * // 使用自定义前缀
- * const storage = createStorageProvider('localStorage', { prefix: 'my-game' });
+ * // 使用 Cloudflare KV
+ * const storage = createStorageProvider('cloudflareKV', { prefix: 'my-app' }, env.KV);
  * ```
  */
 export function createStorageProvider(
     type: StorageProviderType = 'localStorage',
-    config: StorageConfig = {}
+    config: StorageConfig = {},
+    kv?: KVNamespace
 ): IStorageProvider {
     switch (type) {
         case 'localStorage':
             return new LocalStorageProvider(config);
 
         case 'cloudflareKV':
-            // TODO: 实现 CloudflareKVProvider
-            console.warn('CloudflareKV provider not implemented, falling back to localStorage');
-            return new LocalStorageProvider(config);
+            if (!kv) {
+                console.warn('CloudflareKV requires KV namespace, falling back to localStorage');
+                return new LocalStorageProvider(config);
+            }
+            return new CloudflareKVProvider(kv, config);
 
         case 'indexedDB':
             // TODO: 实现 IndexedDBProvider
