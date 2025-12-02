@@ -7,11 +7,11 @@
     "strict": true,
     "skipLibCheck": true,
     "outDir": "./dist",
-    "rootDir": ".",
-    "baseUrl": ".",
+    "rootDir": "..",
+    "baseUrl": "..",
     "paths": {
       "~/*": [
-        "../app/*"
+        "app/*"
       ]
     },
     "types": [
@@ -19,7 +19,9 @@
     ]
   },
   "include": [
-    "./**/*.ts"
+    "./**/*.ts",
+    "../app/lib/**/*.ts",
+    "../app/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

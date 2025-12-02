@@ -245,7 +245,7 @@ async function callOpenAI<T>(
         maxTokens = 16000,
     } = config;
 
-    const { timeout = 60000, retries = 2 } = options;
+    const { timeout = 600000, retries = 2 } = options;
 
     if (!apiKey) {
         return {
