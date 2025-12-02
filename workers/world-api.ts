@@ -122,6 +122,11 @@ worldApi.get('/worlds/:id', async (c) => {
 /**
  * 生成新世界
  * POST /api/worlds/generate
+ * 
+ * 完整流程：
+ * 1. 生成世界基础信息
+ * 2. 生成旅游项目列表
+ * 3. 为每个项目自动生成详情（景点、NPC、图片）
  */
 worldApi.post('/worlds/generate', async (c) => {
     try {
@@ -129,7 +134,10 @@ worldApi.post('/worlds/generate', async (c) => {
         const service = getWorldService(c.env);
         const storage = getStorage(c.env);
 
-        // 生成世界
+        console.log('[WorldAPI] 开始生成完整世界...');
+
+        // 1. 生成世界基础信息
+        console.log('[WorldAPI] Step 1/3: 生成世界基础信息');
         const result = await service.generateWorld(body);
 
         if (!result.success || !result.data) {
@@ -138,20 +146,49 @@ worldApi.post('/worlds/generate', async (c) => {
             }, 500);
         }
 
-        // 生成旅游项目
-        const projectsResult = await service.generateTravelProjects(result.data);
+        const world = result.data;
+        console.log(`[WorldAPI] 世界已创建: ${world.name}`);
+
+        // 2. 生成旅游项目列表
+        console.log('[WorldAPI] Step 2/3: 生成旅游项目列表');
+        const projectsResult = await service.generateTravelProjects(world);
 
         if (!projectsResult.success) {
             // 即使项目生成失败，也保存世界
-            await storage.saveWorld(result.data);
-            return c.json(result.data);
+            console.warn('[WorldAPI] 项目生成失败，仅保存世界基础信息');
+            await storage.saveWorld(world);
+            return c.json(world);
         }
 
-        // 保存世界
-        await storage.saveWorld(result.data);
+        console.log(`[WorldAPI] 生成了 ${world.travelProjects.length} 个旅游项目`);
 
-        return c.json(result.data);
+        // 3. 为每个项目自动生成详情（并发执行）
+        console.log('[WorldAPI] Step 3/3: 为所有项目生成详情（景点、NPC、图片）');
+        const detailsPromises = world.travelProjects.map(async (project, index) => {
+            console.log(`[WorldAPI] 开始生成项目 ${index + 1}/${world.travelProjects.length}: ${project.name}`);
+            try {
+                const detailResult = await service.generateProjectDetails(project, world);
+                if (detailResult.success) {
+                    console.log(`[WorldAPI] 项目 ${project.name} 详情生成完成`);
+                } else {
+                    console.warn(`[WorldAPI] 项目 ${project.name} 详情生成失败: ${detailResult.error}`);
+                }
+            } catch (err) {
+                console.error(`[WorldAPI] 项目 ${project.name} 详情生成异常:`, err);
+            }
+        });
+
+        // 等待所有项目详情生成完成
+        await Promise.all(detailsPromises);
+
+        // 保存完整的世界数据
+        console.log('[WorldAPI] 保存完整世界数据...');
+        await storage.saveWorld(world);
+
+        console.log(`[WorldAPI] ✨ 世界 ${world.name} 生成完毕！`);
+        return c.json(world);
     } catch (error) {
+        console.error('[WorldAPI] 生成世界失败:', error);
         return c.json({
             error: error instanceof Error ? error.message : 'Unknown error',
         }, 500);
