@@ -14,6 +14,14 @@ import type {
     GenerateWorldRequest,
 } from '~/types/world';
 
+import {
+    createAICallRecord,
+    completeAICallRecord,
+    saveAICallRecord,
+    type AICallContext,
+    type AICallType,
+} from './ai-call-recorder';
+
 // ============================================
 // 生成配置类型
 // ============================================
@@ -291,7 +299,9 @@ async function callOpenAI<T>(
     prompt: string,
     config: AIGenerateConfig,
     options: GenerateOptions = {},
-    logLabel: string = 'AI调用'
+    logLabel: string = 'AI调用',
+    callType: AICallType = 'generate_text',
+    callContext: AICallContext = {}
 ): Promise<GenerateResult<T>> {
     const {
         apiKey = '',
@@ -306,7 +316,21 @@ async function callOpenAI<T>(
     // 打印 prompt
     aiLogger.prompt(logLabel, prompt);
 
+    // 创建 AI 调用记录
+    const record = createAICallRecord(callType, prompt, callContext);
+    const startTime = Date.now();
+    let retryCount = 0;
+
     if (!apiKey) {
+        const completedRecord = completeAICallRecord(record, {
+            success: false,
+            error: 'OpenAI API Key is required',
+            model,
+            duration: Date.now() - startTime,
+            retryCount: 0,
+        });
+        await saveAICallRecord(completedRecord);
+
         return {
             success: false,
             error: 'OpenAI API Key is required',
@@ -316,6 +340,7 @@ async function callOpenAI<T>(
     let lastError: string = '';
 
     for (let attempt = 0; attempt <= retries; attempt++) {
+        retryCount = attempt;
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -372,14 +397,27 @@ async function callOpenAI<T>(
             // 打印 response
             aiLogger.response(logLabel, parsed);
 
+            const usage = data.usage ? {
+                promptTokens: data.usage.prompt_tokens,
+                completionTokens: data.usage.completion_tokens,
+                totalTokens: data.usage.total_tokens,
+            } : undefined;
+
+            // 保存成功记录
+            const completedRecord = completeAICallRecord(record, {
+                success: true,
+                response: content,
+                model,
+                tokenUsage: usage,
+                duration: Date.now() - startTime,
+                retryCount,
+            });
+            await saveAICallRecord(completedRecord);
+
             return {
                 success: true,
                 data: parsed,
-                usage: data.usage ? {
-                    promptTokens: data.usage.prompt_tokens,
-                    completionTokens: data.usage.completion_tokens,
-                    totalTokens: data.usage.total_tokens,
-                } : undefined,
+                usage,
             };
         } catch (error) {
             lastError = error instanceof Error ? error.message : String(error);
@@ -395,6 +433,16 @@ async function callOpenAI<T>(
     }
 
     console.error(`[AI-Generate] ❌ ${logLabel} 最终失败，已重试 ${retries + 1} 次`);
+
+    // 保存失败记录
+    const completedRecord = completeAICallRecord(record, {
+        success: false,
+        error: lastError,
+        model,
+        duration: Date.now() - startTime,
+        retryCount,
+    });
+    await saveAICallRecord(completedRecord);
 
     return {
         success: false,
@@ -412,10 +460,11 @@ async function callOpenAI<T>(
 export async function ai_generate_world(
     request: GenerateWorldRequest,
     config: AIGenerateConfig,
-    options?: GenerateOptions
+    options?: GenerateOptions,
+    context?: AICallContext
 ): Promise<GenerateResult<Omit<World, 'id' | 'createdAt' | 'generationStatus' | 'travelProjects' | 'travelVehicle'>>> {
     const prompt = PROMPTS.generateWorld(request.theme);
-    return callOpenAI(prompt, config, options, '生成世界');
+    return callOpenAI(prompt, config, options, '生成世界', 'generate_world', context || {});
 }
 
 /**
@@ -429,7 +478,9 @@ export async function ai_generate_travel_projects(
 ): Promise<GenerateResult<Array<Omit<TravelProject, 'id' | 'worldId' | 'spots' | 'tourRoute' | 'generationStatus' | 'selectedCount' | 'createdAt'>>>> {
     const prompt = PROMPTS.generateTravelProjects(world, count);
 
-    const result = await callOpenAI<{ projects?: unknown[] } | unknown[]>(prompt, config, options, '生成旅游项目');
+    const result = await callOpenAI<{ projects?: unknown[] } | unknown[]>(
+        prompt, config, options, '生成旅游项目', 'generate_projects', { worldId: world.id }
+    );
 
     if (result.success && result.data) {
         // 处理可能的包装格式
@@ -455,7 +506,9 @@ export async function ai_generate_spots(
 ): Promise<GenerateResult<Array<Omit<Spot, 'id' | 'projectId' | 'npcs' | 'hotspots' | 'orderInRoute' | 'generationStatus'>>>> {
     const prompt = PROMPTS.generateSpots(project, world, count);
 
-    const result = await callOpenAI<{ spots?: unknown[] } | unknown[]>(prompt, config, options, '生成景点');
+    const result = await callOpenAI<{ spots?: unknown[] } | unknown[]>(
+        prompt, config, options, '生成景点', 'generate_spots', { worldId: world.id, projectId: project.id }
+    );
 
     if (result.success && result.data) {
         const spots = Array.isArray(result.data) ? result.data : (result.data as { spots?: unknown[] }).spots;
@@ -478,7 +531,7 @@ export async function ai_generate_npc(
     options?: GenerateOptions
 ): Promise<GenerateResult<Omit<SpotNPC, 'id' | 'sprite' | 'sprites' | 'greetingDialogId' | 'dialogOptions' | 'generationStatus'>>> {
     const prompt = PROMPTS.generateNPC(spot, world);
-    return callOpenAI(prompt, config, options, `生成NPC-${spot.name}`);
+    return callOpenAI(prompt, config, options, `生成NPC-${spot.name}`, 'generate_npc', { worldId: world.id, spotId: spot.id });
 }
 
 /**
@@ -496,7 +549,7 @@ export async function ai_generate_dialog(
     farewell: string;
 }>> {
     const prompt = PROMPTS.generateDialog(npc, context, world);
-    return callOpenAI(prompt, config, options, `生成对话-${npc.name}`);
+    return callOpenAI(prompt, config, options, `生成对话-${npc.name}`, 'generate_dialog', { worldId: world.id, npcId: npc.id });
 }
 
 /**
@@ -505,9 +558,10 @@ export async function ai_generate_dialog(
 export async function ai_generate_text(
     prompt: string,
     config: AIGenerateConfig,
-    options?: GenerateOptions
+    options?: GenerateOptions,
+    context?: AICallContext
 ): Promise<GenerateResult<string>> {
-    const result = await callOpenAI<{ text: string } | string>(prompt, config, options, '通用文本生成');
+    const result = await callOpenAI<{ text: string } | string>(prompt, config, options, '通用文本生成', 'generate_text', context || {});
 
     if (result.success && result.data) {
         const text = typeof result.data === 'string' ? result.data : (result.data as { text: string }).text;
@@ -529,7 +583,7 @@ export async function ai_generate_travel_vehicle(
     options?: GenerateOptions
 ): Promise<GenerateResult<Omit<TravelVehicle, 'id' | 'image' | 'createdAt' | 'generationStatus'>>> {
     const prompt = PROMPTS.generateTravelVehicle(world);
-    return callOpenAI(prompt, config, options, '生成旅行器');
+    return callOpenAI(prompt, config, options, '生成旅行器', 'generate_vehicle', { worldId: world.id });
 }
 
 // ============================================

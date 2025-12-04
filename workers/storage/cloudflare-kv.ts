@@ -5,8 +5,8 @@
  * 适用于 Cloudflare Workers 环境
  */
 
-import type { World, TravelSession } from '~/types/world';
-import type { IStorageProvider, StorageConfig, ExportData } from './types';
+import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '~/types/world';
+import type { IStorageProvider, StorageConfig, ExportData, AICallRecord, AICallQueryParams, AICallStats } from './types';
 
 // ============================================
 // KV 键名前缀
@@ -168,6 +168,90 @@ export class CloudflareKVProvider implements IStorageProvider {
     async getLatestPlayerSession(playerId: string): Promise<TravelSession | null> {
         const sessions = await this.getPlayerSessions(playerId);
         return sessions[0] || null;
+    }
+
+    // ============================================
+    // 旅行器操作 (未实现 - 使用 SQLite)
+    // ============================================
+
+    async getVehicle(_id: string): Promise<TravelVehicle | null> {
+        throw new Error('CloudflareKV: getVehicle not implemented, use SQLite provider');
+    }
+
+    async getVehicleByWorldId(_worldId: string): Promise<TravelVehicle | null> {
+        throw new Error('CloudflareKV: getVehicleByWorldId not implemented, use SQLite provider');
+    }
+
+    async saveVehicle(_vehicle: TravelVehicle, _worldId: string): Promise<void> {
+        throw new Error('CloudflareKV: saveVehicle not implemented, use SQLite provider');
+    }
+
+    // ============================================
+    // 旅游项目操作 (未实现 - 使用 SQLite)
+    // ============================================
+
+    async getProject(_id: string): Promise<TravelProject | null> {
+        throw new Error('CloudflareKV: getProject not implemented, use SQLite provider');
+    }
+
+    async getProjectsByWorldId(_worldId: string): Promise<TravelProject[]> {
+        throw new Error('CloudflareKV: getProjectsByWorldId not implemented, use SQLite provider');
+    }
+
+    async saveProject(_project: TravelProject): Promise<void> {
+        throw new Error('CloudflareKV: saveProject not implemented, use SQLite provider');
+    }
+
+    // ============================================
+    // 景点操作 (未实现 - 使用 SQLite)
+    // ============================================
+
+    async getSpot(_id: string): Promise<Spot | null> {
+        throw new Error('CloudflareKV: getSpot not implemented, use SQLite provider');
+    }
+
+    async getSpotsByProjectId(_projectId: string): Promise<Spot[]> {
+        throw new Error('CloudflareKV: getSpotsByProjectId not implemented, use SQLite provider');
+    }
+
+    async saveSpot(_spot: Spot): Promise<void> {
+        throw new Error('CloudflareKV: saveSpot not implemented, use SQLite provider');
+    }
+
+    // ============================================
+    // NPC 操作 (未实现 - 使用 SQLite)
+    // ============================================
+
+    async getNPC(_id: string): Promise<SpotNPC | null> {
+        throw new Error('CloudflareKV: getNPC not implemented, use SQLite provider');
+    }
+
+    async getNPCsBySpotId(_spotId: string): Promise<SpotNPC[]> {
+        throw new Error('CloudflareKV: getNPCsBySpotId not implemented, use SQLite provider');
+    }
+
+    async saveNPC(_npc: SpotNPC, _spotId: string): Promise<void> {
+        throw new Error('CloudflareKV: saveNPC not implemented, use SQLite provider');
+    }
+
+    // ============================================
+    // AI 调用记录操作 (未实现 - 使用 SQLite)
+    // ============================================
+
+    async saveAICall(_record: AICallRecord): Promise<void> {
+        throw new Error('CloudflareKV: saveAICall not implemented, use SQLite provider');
+    }
+
+    async getAICall(_id: string): Promise<AICallRecord | null> {
+        throw new Error('CloudflareKV: getAICall not implemented, use SQLite provider');
+    }
+
+    async getAICalls(_params?: AICallQueryParams): Promise<AICallRecord[]> {
+        throw new Error('CloudflareKV: getAICalls not implemented, use SQLite provider');
+    }
+
+    async getAICallStats(_params?: AICallQueryParams): Promise<AICallStats> {
+        throw new Error('CloudflareKV: getAICallStats not implemented, use SQLite provider');
     }
 
     // ============================================

@@ -1,9 +1,17 @@
 /**
  * 图片生成服务 - 封装层
- * 
+ *
  * 提供统一的 image_generate 接口
  * 底层实现留空，由用户自行填充
  */
+
+import {
+    createAICallRecord,
+    completeAICallRecord,
+    saveAICallRecord,
+    type AICallContext,
+    type AICallType,
+} from './ai-call-recorder';
 
 // ============================================
 // 配置类型
@@ -209,13 +217,18 @@ export async function image_generate(
     prompt: string,
     config: ImageGenerateConfig,
     options: ImageGenerateOptions = {},
-    logLabel: string = '图片生成'
+    logLabel: string = '图片生成',
+    callType: AICallType = 'image_world_cover',
+    callContext: AICallContext = {}
 ): Promise<ImageGenerateResult> {
     const startTime = Date.now();
     const { width = 1024, height = 768, style = 'fantasy' } = options;
 
     // 打印图片生成 prompt
     imageLogger.prompt(logLabel, prompt);
+
+    // 创建 AI 调用记录
+    const record = createAICallRecord(callType, prompt, callContext);
 
     // ========================================
     // TODO: 在这里实现实际的图片生成逻辑
@@ -250,12 +263,23 @@ export async function image_generate(
     // 当前返回占位图（开发阶段）
     const placeholderText = prompt.slice(0, 30).replace(/[^\w\s]/g, '');
     const url = getPlaceholderImage(width, height, placeholderText);
+    const duration = Date.now() - startTime;
+
+    // 保存成功记录
+    const completedRecord = completeAICallRecord(record, {
+        success: true,
+        response: url,
+        model: 'placeholder',
+        duration,
+        retryCount: 0,
+    });
+    await saveAICallRecord(completedRecord);
 
     return {
         success: true,
         url,
         prompt,
-        duration: Date.now() - startTime,
+        duration,
     };
 }
 
@@ -294,7 +318,7 @@ export async function image_generate_batch(
  * 生成世界封面图
  */
 export async function image_generate_world_cover(
-    world: Parameters<typeof buildWorldCoverPrompt>[0],
+    world: Parameters<typeof buildWorldCoverPrompt>[0] & { id?: string },
     config: ImageGenerateConfig,
     options?: ImageGenerateOptions
 ): Promise<ImageGenerateResult> {
@@ -304,17 +328,18 @@ export async function image_generate_world_cover(
         height: 1080,
         style: 'fantasy',
         ...options,
-    }, `世界封面-${world.name}`);
+    }, `世界封面-${world.name}`, 'image_world_cover', { worldId: world.id });
 }
 
 /**
  * 生成景点图片
  */
 export async function image_generate_spot(
-    spot: Parameters<typeof buildSpotImagePrompt>[0],
+    spot: Parameters<typeof buildSpotImagePrompt>[0] & { id?: string },
     worldName: string,
     config: ImageGenerateConfig,
-    options?: ImageGenerateOptions
+    options?: ImageGenerateOptions,
+    context?: { worldId?: string; projectId?: string }
 ): Promise<ImageGenerateResult> {
     const prompt = buildSpotImagePrompt(spot, worldName);
     return image_generate(prompt, config, {
@@ -322,17 +347,18 @@ export async function image_generate_spot(
         height: 900,
         style: 'fantasy',
         ...options,
-    }, `景点图片-${spot.name}`);
+    }, `景点图片-${spot.name}`, 'image_spot', { ...context, spotId: spot.id });
 }
 
 /**
  * 生成 NPC 立绘
  */
 export async function image_generate_npc_portrait(
-    npc: Parameters<typeof buildNPCPortraitPrompt>[0],
+    npc: Parameters<typeof buildNPCPortraitPrompt>[0] & { id?: string },
     emotion: string = 'neutral',
     config: ImageGenerateConfig,
-    options?: ImageGenerateOptions
+    options?: ImageGenerateOptions,
+    context?: { worldId?: string; spotId?: string }
 ): Promise<ImageGenerateResult> {
     const prompt = buildNPCPortraitPrompt(npc, emotion);
     return image_generate(prompt, config, {
@@ -340,17 +366,18 @@ export async function image_generate_npc_portrait(
         height: 768,
         style: 'anime',
         ...options,
-    }, `NPC立绘-${npc.name}`);
+    }, `NPC立绘-${npc.name}`, 'image_npc_portrait', { ...context, npcId: npc.id });
 }
 
 /**
  * 生成项目封面图
  */
 export async function image_generate_project_cover(
-    project: Parameters<typeof buildProjectCoverPrompt>[0],
+    project: Parameters<typeof buildProjectCoverPrompt>[0] & { id?: string },
     worldName: string,
     config: ImageGenerateConfig,
-    options?: ImageGenerateOptions
+    options?: ImageGenerateOptions,
+    context?: { worldId?: string }
 ): Promise<ImageGenerateResult> {
     const prompt = buildProjectCoverPrompt(project, worldName);
     return image_generate(prompt, config, {
@@ -358,17 +385,18 @@ export async function image_generate_project_cover(
         height: 675,
         style: 'fantasy',
         ...options,
-    }, `项目封面-${project.name}`);
+    }, `项目封面-${project.name}`, 'image_project_cover', { ...context, projectId: project.id });
 }
 
 /**
  * 生成旅行器图片
  */
 export async function image_generate_travel_vehicle(
-    vehicle: Parameters<typeof buildTravelVehiclePrompt>[0],
+    vehicle: Parameters<typeof buildTravelVehiclePrompt>[0] & { id?: string },
     worldName: string,
     config: ImageGenerateConfig,
-    options?: ImageGenerateOptions
+    options?: ImageGenerateOptions,
+    context?: { worldId?: string }
 ): Promise<ImageGenerateResult> {
     const prompt = buildTravelVehiclePrompt(vehicle, worldName);
     return image_generate(prompt, config, {
@@ -376,7 +404,7 @@ export async function image_generate_travel_vehicle(
         height: 900,
         style: 'fantasy',
         ...options,
-    }, `旅行器图片-${vehicle.name}`);
+    }, `旅行器图片-${vehicle.name}`, 'image_vehicle', context);
 }
 
 // ============================================

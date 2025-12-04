@@ -14,11 +14,21 @@ import {
 import { getStorage } from './storage/sqlite';
 import { taskQueue, type Task } from './task-queue';
 import { apiLogger } from './logger';
+import { configureAICallRecorder } from '../app/lib/ai/ai-call-recorder';
 import type {
     World,
     TravelProject,
     GenerateWorldRequest,
 } from '../app/types/world';
+
+// 配置 AI 调用记录器
+configureAICallRecorder({
+    enabled: true,
+    onSave: async (record) => {
+        const storage = getStorage();
+        await storage.saveAICall(record);
+    },
+});
 
 // ============================================
 // 创建 API 路由
