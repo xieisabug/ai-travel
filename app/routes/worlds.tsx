@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWorlds } from '~/hooks/useWorlds';
-import type { World, TravelProject } from '~/types/world';
 
-type ViewState = 'worlds' | 'projects' | 'preparing' | 'generating';
+type ViewState = 'worlds' | 'world_detail' | 'preparing' | 'generating';
 
 // 生成阶段信息
 const generationSteps = [
   { id: 1, label: '创建世界基础', icon: '🌍' },
-  { id: 2, label: '生成旅游项目', icon: '🗺️' },
-  { id: 3, label: '创建景点详情', icon: '🏛️' },
-  { id: 4, label: '生成 NPC 角色', icon: '👥' },
-  { id: 5, label: '绘制图片素材', icon: '🎨' },
+  { id: 2, label: '设计旅行器', icon: '🚀' },
+  { id: 3, label: '生成旅游项目', icon: '🗺️' },
+  { id: 4, label: '创建景点详情', icon: '🏛️' },
+  { id: 5, label: '生成 NPC 角色', icon: '👥' },
+  { id: 6, label: '绘制图片素材', icon: '🎨' },
 ];
 
 export default function WorldsPage() {
@@ -32,7 +32,6 @@ export default function WorldsPage() {
 
   const [viewState, setViewState] = useState<ViewState>('worlds');
   const [playerName, setPlayerName] = useState('');
-  const [selectedProject, setSelectedProject] = useState<TravelProject | null>(null);
   const [preparingMessage, setPreparingMessage] = useState('');
   const [currentGenStep, setCurrentGenStep] = useState(0);
 
@@ -44,7 +43,7 @@ export default function WorldsPage() {
     // 模拟进度更新（实际生成时间较长，提供视觉反馈）
     const progressInterval = setInterval(() => {
       setCurrentGenStep(prev => {
-        if (prev < 5) return prev + 1;
+        if (prev < 6) return prev + 1;
         return prev;
       });
     }, 3000);
@@ -54,9 +53,9 @@ export default function WorldsPage() {
     clearInterval(progressInterval);
 
     if (world) {
-      setCurrentGenStep(5);
+      setCurrentGenStep(6);
       setTimeout(() => {
-        setViewState('projects');
+        setViewState('world_detail');
       }, 1000);
     } else {
       setViewState('worlds');
@@ -67,49 +66,49 @@ export default function WorldsPage() {
   const handleSelectWorld = async (worldId: string) => {
     const world = await selectWorld(worldId);
     if (world) {
-      setViewState('projects');
+      setViewState('world_detail');
     }
   };
 
-  // 选择旅行项目
-  const handleSelectProject = async (project: TravelProject) => {
-    setSelectedProject(project);
-
-    // 如果项目还没有生成详情，先生成
-    if (project.generationStatus !== 'ready') {
-      setPreparingMessage('正在生成旅行目的地详情...');
-      setViewState('preparing');
-      const updatedProject = await selectProject(project.id);
-      if (updatedProject) {
-        setSelectedProject(updatedProject);
-        setPreparingMessage('详情生成完成！准备启程...');
-      } else {
-        setViewState('projects');
-        return;
-      }
-    }
-  };
-
-  // 开始旅行
+  // 开始旅行（直接开始，不需要选择项目）
   const handleStartTravel = async () => {
-    if (!selectedProject || !playerName.trim()) return;
+    if (!currentWorld || !playerName.trim()) return;
 
     setPreparingMessage('正在准备您的旅程...');
     setViewState('preparing');
 
-    const session = await createSession(selectedProject.id, playerName.trim());
+    // 如果有项目且第一个项目未就绪，先生成详情
+    const firstProject = currentWorld.travelProjects?.[0];
+    if (firstProject && firstProject.generationStatus !== 'ready') {
+      setPreparingMessage('正在生成旅行目的地详情...');
+      const updatedProject = await selectProject(firstProject.id);
+      if (!updatedProject) {
+        setPreparingMessage('详情生成失败，请重试');
+        setTimeout(() => setViewState('world_detail'), 2000);
+        return;
+      }
+    }
+
+    // 创建会话
+    const projectId = firstProject?.id || currentWorld.travelProjects?.[0]?.id;
+    if (!projectId) {
+      setPreparingMessage('没有可用的旅游项目');
+      setTimeout(() => setViewState('world_detail'), 2000);
+      return;
+    }
+
+    const session = await createSession(projectId, playerName.trim());
     if (session) {
       // 导航到世界游戏页面
       navigate(`/world-game?session=${session.id}`);
     } else {
-      setViewState('projects');
+      setViewState('world_detail');
     }
   };
 
   // 返回世界列表
   const handleBackToWorlds = () => {
     setViewState('worlds');
-    setSelectedProject(null);
   };
 
   // 渲染加载状态
@@ -159,7 +158,7 @@ export default function WorldsPage() {
             </div>
 
             <div className="flex items-center justify-center gap-3 mt-8 pt-6 border-t border-white/10 text-indigo-400 text-lg">
-              {currentGenStep > 0 && currentGenStep <= 5 && (
+              {currentGenStep > 0 && currentGenStep <= 6 && (
                 <>
                   <div className="w-3 h-3 bg-indigo-500 rounded-full animate-pulse" />
                   <span>{generationSteps[currentGenStep - 1]?.label}...</span>
@@ -170,7 +169,7 @@ export default function WorldsPage() {
 
           <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-6">
             <p className="text-white/70 text-sm mb-1">💡 小提示：生成一个完整的世界大约需要 1-2 分钟</p>
-            <p className="text-white/70 text-sm">包含世界设定、多个旅游项目、景点、NPC 和图片</p>
+            <p className="text-white/70 text-sm">包含世界设定、旅行器、旅游项目、景点、NPC 和图片</p>
           </div>
         </div>
       </div>
@@ -185,10 +184,10 @@ export default function WorldsPage() {
         <div className="text-center relative z-10">
           <div className="w-16 h-16 border-4 border-white/20 border-t-indigo-500 rounded-full animate-spin mx-auto mb-6" />
           <h2 className="text-2xl font-bold mb-4">{preparingMessage}</h2>
-          {selectedProject && (
+          {currentWorld && (
             <div className="mt-8 p-6 bg-white/5 rounded-xl border border-white/10">
-              <h3 className="text-indigo-400 font-semibold mb-2">{selectedProject.name}</h3>
-              <p className="text-white/70 text-sm">{selectedProject.description}</p>
+              <h3 className="text-indigo-400 font-semibold mb-2">{currentWorld.name}</h3>
+              <p className="text-white/70 text-sm">{currentWorld.description}</p>
             </div>
           )}
         </div>
@@ -196,14 +195,14 @@ export default function WorldsPage() {
     );
   }
 
-  // 渲染项目选择页
-  if (viewState === 'projects' && currentWorld) {
+  // 渲染世界详情页（替代原来的项目选择页）
+  if (viewState === 'world_detail' && currentWorld) {
     return (
       <div className="min-h-screen bg-black text-white p-8">
         <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(102,126,234,0.15),transparent)] pointer-events-none" />
         <div className="relative z-10 max-w-6xl mx-auto">
           <div className="mb-8">
-            <button 
+            <button
               className="bg-white/10 border border-white/20 text-white px-4 py-2 rounded-lg cursor-pointer transition-all hover:bg-white/15 hover:border-white/30 mb-6"
               onClick={handleBackToWorlds}
             >
@@ -213,6 +212,9 @@ export default function WorldsPage() {
               <h1 className="text-3xl font-bold bg-gradient-to-br from-indigo-500 to-purple-600 bg-clip-text text-transparent mb-2">
                 {currentWorld.name}
               </h1>
+              {currentWorld.subtitle && (
+                <p className="text-white/80 text-lg mb-2">{currentWorld.subtitle}</p>
+              )}
               <p className="text-white/60 max-w-2xl mx-auto">{currentWorld.description}</p>
             </div>
             {currentWorld.imageUrl && (
@@ -224,74 +226,146 @@ export default function WorldsPage() {
             )}
           </div>
 
-          <div className="max-w-5xl mx-auto">
-            <h2 className="text-xl font-semibold text-indigo-400 mb-2">🧭 可选旅行项目</h2>
-            <p className="text-white/50 mb-6">选择一个项目开始您的异世界之旅</p>
-
+          <div className="max-w-5xl mx-auto space-y-8">
             {error && (
-              <div 
-                className="bg-red-500/20 border border-red-500 text-red-400 p-4 rounded-lg mb-6 cursor-pointer text-center"
+              <div
+                className="bg-red-500/20 border border-red-500 text-red-400 p-4 rounded-lg cursor-pointer text-center"
                 onClick={clearError}
               >
                 {error}（点击关闭）
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.map(project => (
-                <div
-                  key={project.id}
-                  className="bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/10 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
-                  onClick={() => handleSelectProject(project)}
-                >
-                  {project.coverImage && (
-                    <img
-                      src={project.coverImage}
-                      alt={project.name}
-                      className="w-full h-44 object-cover"
-                    />
-                  )}
-                  <div className="p-5">
-                    <h3 className="text-indigo-400 font-semibold mb-2">{project.name}</h3>
-                    <p className="text-white/60 text-sm mb-4 line-clamp-3">{project.description}</p>
-                    <div className="flex justify-between text-xs text-white/40">
-                      <span>难度: {project.difficulty}</span>
-                      <span>行程: {project.duration || '?'}天</span>
-                    </div>
-                    {project.generationStatus === 'ready' && (
-                      <span className="inline-block mt-3 px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs">
-                        ✓ 已准备就绪
-                      </span>
-                    )}
-                  </div>
+            {/* 世界信息卡片 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                <h3 className="text-indigo-400 font-semibold mb-4 flex items-center gap-2">
+                  🌍 世界概况
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <div><span className="text-white/50">地理：</span><span className="text-white/80">{currentWorld.geography}</span></div>
+                  <div><span className="text-white/50">气候：</span><span className="text-white/80">{currentWorld.climate}</span></div>
+                  <div><span className="text-white/50">文化：</span><span className="text-white/80">{currentWorld.culture}</span></div>
+                  <div><span className="text-white/50">居民：</span><span className="text-white/80">{currentWorld.inhabitants}</span></div>
                 </div>
-              ))}
+              </div>
+
+              <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                <h3 className="text-indigo-400 font-semibold mb-4 flex items-center gap-2">
+                  🍽️ 特色文化
+                </h3>
+                <div className="space-y-3 text-sm">
+                  <div><span className="text-white/50">美食：</span><span className="text-white/80">{currentWorld.cuisine}</span></div>
+                  <div><span className="text-white/50">语言：</span><span className="text-white/80">{currentWorld.language}</span></div>
+                  <div><span className="text-white/50">货币：</span><span className="text-white/80">{currentWorld.currency}</span></div>
+                  {currentWorld.rules && (
+                    <div><span className="text-white/50">规则：</span><span className="text-white/80">{currentWorld.rules}</span></div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {selectedProject && selectedProject.generationStatus === 'ready' && (
-              <div className="mt-8 p-8 bg-white/5 border border-white/10 rounded-2xl text-center">
-                <h3 className="text-xl font-semibold mb-4">准备启程</h3>
-                <div className="mb-6">
-                  <label htmlFor="playerName" className="block mb-2 text-white/70">旅行者姓名</label>
-                  <input
-                    id="playerName"
-                    type="text"
-                    value={playerName}
-                    onChange={e => setPlayerName(e.target.value)}
-                    placeholder="输入您的名字"
-                    maxLength={20}
-                    className="w-full max-w-[300px] px-4 py-3 bg-white/[0.06] border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500 focus:bg-indigo-500/10 focus:ring-4 focus:ring-indigo-500/10 transition-all"
-                  />
+            {/* 旅行器信息 */}
+            {currentWorld.travelVehicle && (
+              <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-2xl p-6 border border-indigo-500/20">
+                <h3 className="text-indigo-400 font-semibold mb-4 flex items-center gap-2">
+                  🚀 旅行器：{currentWorld.travelVehicle.name}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-white/80 mb-3">{currentWorld.travelVehicle.description}</p>
+                    <p className="text-white/60 text-sm mb-4">{currentWorld.travelVehicle.detailedDescription}</p>
+                    <div className="space-y-2 text-sm">
+                      <div><span className="text-white/50">类型：</span><span className="text-white/80">{currentWorld.travelVehicle.type}</span></div>
+                      <div><span className="text-white/50">载客量：</span><span className="text-white/80">{currentWorld.travelVehicle.capacity} 人</span></div>
+                      <div><span className="text-white/50">速度：</span><span className="text-white/80">{currentWorld.travelVehicle.speed}</span></div>
+                      <div><span className="text-white/50">舒适度：</span><span className="text-white/80">{'⭐'.repeat(currentWorld.travelVehicle.comfortLevel)}</span></div>
+                    </div>
+                    {currentWorld.travelVehicle.abilities.length > 0 && (
+                      <div className="mt-4">
+                        <span className="text-white/50 text-sm">特殊能力：</span>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {currentWorld.travelVehicle.abilities.map((ability, i) => (
+                            <span key={i} className="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs">
+                              {ability}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {currentWorld.travelVehicle.image && (
+                    <div className="flex items-center justify-center">
+                      <img
+                        src={currentWorld.travelVehicle.image}
+                        alt={currentWorld.travelVehicle.name}
+                        className="max-w-full max-h-48 object-contain rounded-xl"
+                      />
+                    </div>
+                  )}
                 </div>
-                <button
-                  className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-8 py-4 rounded-full text-lg font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(102,126,234,0.4)] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                  onClick={handleStartTravel}
-                  disabled={!playerName.trim() || isGenerating}
-                >
-                  {isGenerating ? '准备中...' : '🚀 开始旅程'}
-                </button>
               </div>
             )}
+
+            {/* 旅游项目概览 */}
+            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+              <h3 className="text-indigo-400 font-semibold mb-4 flex items-center gap-2">
+                🗺️ 旅游项目概览
+              </h3>
+              <p className="text-white/60 text-sm mb-4">
+                本次旅行包含 {projects.length} 个精彩项目，AI 已为您规划好完整行程
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {projects.map((project, index) => (
+                  <div
+                    key={project.id}
+                    className="bg-white/5 border border-white/10 rounded-xl p-4"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 bg-indigo-500/30 text-indigo-400 rounded-full flex items-center justify-center text-xs font-bold">
+                        {index + 1}
+                      </span>
+                      <h4 className="text-white font-medium text-sm">{project.name}</h4>
+                    </div>
+                    <p className="text-white/50 text-xs line-clamp-2">{project.description}</p>
+                    <div className="flex gap-2 mt-2">
+                      {project.tags?.slice(0, 2).map((tag, i) => (
+                        <span key={i} className="px-1.5 py-0.5 bg-white/10 text-white/60 rounded text-xs">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 开始旅行 */}
+            <div className="bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/10 rounded-2xl p-8 text-center">
+              <h3 className="text-xl font-semibold mb-4">准备启程</h3>
+              <p className="text-white/60 mb-6">
+                搭乘 {currentWorld.travelVehicle?.name || '神秘旅行器'}，开启您的异世界之旅
+              </p>
+              <div className="mb-6">
+                <label htmlFor="playerName" className="block mb-2 text-white/70">旅行者姓名</label>
+                <input
+                  id="playerName"
+                  type="text"
+                  value={playerName}
+                  onChange={e => setPlayerName(e.target.value)}
+                  placeholder="输入您的名字"
+                  maxLength={20}
+                  className="w-full max-w-[300px] px-4 py-3 bg-white/[0.06] border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500 focus:bg-indigo-500/10 focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                />
+              </div>
+              <button
+                className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-8 py-4 rounded-full text-lg font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(102,126,234,0.4)] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                onClick={handleStartTravel}
+                disabled={!playerName.trim() || isGenerating}
+              >
+                {isGenerating ? '准备中...' : '🚀 开始旅程'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -303,10 +377,10 @@ export default function WorldsPage() {
     <div className="min-h-screen bg-black text-white p-8">
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(102,126,234,0.15),transparent)] pointer-events-none" />
       <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:60px_60px] pointer-events-none" />
-      
+
       <div className="relative z-10 max-w-6xl mx-auto">
         <div className="text-center mb-8 relative">
-          <button 
+          <button
             className="absolute top-0 left-0 bg-white/10 border border-white/20 text-white px-4 py-2 rounded-lg cursor-pointer transition-all hover:bg-white/15 hover:border-white/30"
             onClick={() => navigate('/')}
           >
@@ -319,7 +393,7 @@ export default function WorldsPage() {
         </div>
 
         {error && (
-          <div 
+          <div
             className="bg-red-500/20 border border-red-500 text-red-400 p-4 rounded-lg mb-6 cursor-pointer text-center max-w-xl mx-auto"
             onClick={clearError}
           >
@@ -374,9 +448,11 @@ export default function WorldsPage() {
                   <div className="p-5">
                     <h3 className="text-indigo-400 font-semibold mb-2">{world.name}</h3>
                     <p className="text-white/60 text-sm mb-4 line-clamp-3 leading-relaxed">{world.description}</p>
-                    <div className="flex justify-between text-xs text-white/40">
+                    <div className="flex justify-between items-center text-xs text-white/40">
                       <span>{world.travelProjects?.length || 0} 个旅行项目</span>
-                      <span>{world.era || '未知纪元'}</span>
+                      {world.travelVehicle && (
+                        <span className="text-indigo-400">🚀 {world.travelVehicle.name}</span>
+                      )}
                     </div>
                   </div>
                 </div>

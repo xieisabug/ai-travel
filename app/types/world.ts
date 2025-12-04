@@ -49,6 +49,8 @@ export interface World {
     // === 旅游相关 ===
     /** 最佳旅游时间 */
     bestTimeToVisit?: string;
+    /** 旅行器（交通工具） */
+    travelVehicle?: TravelVehicle;
     /** 可用的旅游项目 */
     travelProjects: TravelProject[];
 
@@ -73,6 +75,61 @@ export type WorldGenerationStatus =
     | 'ready'           // 已生成，可以选择项目
     | 'projects_ready'  // 旅游项目已生成
     | 'error';          // 生成失败
+
+// ============================================
+// 旅行器系统（交通工具）
+// ============================================
+
+/**
+ * 旅行器（交通工具）
+ * 用于在世界中旅行的载具
+ */
+export interface TravelVehicle {
+    /** 旅行器唯一标识 */
+    id: string;
+    /** 旅行器名称 */
+    name: string;
+    /** 旅行器类型（如：飞艇、魔法列车、巨龙等） */
+    type: string;
+    /** 旅行器简介 */
+    description: string;
+    /** 详细描述 */
+    detailedDescription: string;
+    /** 旅行器图片 URL */
+    image?: string;
+
+    // === 特性 ===
+    /** 载客量 */
+    capacity: number;
+    /** 速度描述 */
+    speed: string;
+    /** 特殊能力/功能 */
+    abilities: string[];
+    /** 舒适度等级 1-5 */
+    comfortLevel: number;
+
+    // === 外观 ===
+    /** 外观描述（用于生成图片） */
+    appearance: string;
+    /** 内部设施描述 */
+    interiorDescription: string;
+
+    // === 元数据 ===
+    /** 创建时间 */
+    createdAt: string;
+    /** 生成状态 */
+    generationStatus: VehicleGenerationStatus;
+}
+
+/**
+ * 旅行器生成状态
+ */
+export type VehicleGenerationStatus =
+    | 'pending'           // 待生成
+    | 'generating_text'   // 正在生成文本
+    | 'generating_image'  // 正在生成图片
+    | 'ready'             // 已就绪
+    | 'error';            // 生成失败
 
 // ============================================
 // 旅游项目系统

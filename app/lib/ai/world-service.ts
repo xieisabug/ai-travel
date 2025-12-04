@@ -8,6 +8,7 @@
 import type {
     World,
     TravelProject,
+    TravelVehicle,
     Spot,
     SpotNPC,
     GenerateWorldRequest,
@@ -112,14 +113,14 @@ export class WorldGenerationService {
 
     /**
      * 生成新世界
-     * 首先生成世界的基础描述，然后生成封面图
+     * 首先生成世界的基础描述，然后生成旅行器和封面图
      */
     async generateWorld(request: GenerateWorldRequest = {}): Promise<GenerateResult<World>> {
         log.info('🌍 开始生成世界...');
         log.debug('请求参数', request);
 
         // 1. 生成世界描述
-        log.step(1, 3, '调用 AI 生成世界描述...');
+        log.step(1, 4, '调用 AI 生成世界描述...');
         const startTime = Date.now();
         const descResult = await ai_generate.world(request, this.config.ai);
         const elapsed = Date.now() - startTime;
@@ -138,11 +139,12 @@ export class WorldGenerationService {
         });
 
         // 2. 创建世界对象
-        log.step(2, 3, '创建世界对象...');
+        log.step(2, 4, '创建世界对象...');
         const world: World = {
             id: generateId('world_'),
             ...descResult.data,
             coverImage: undefined,
+            travelVehicle: undefined,
             travelProjects: [],
             createdAt: now(),
             generationStatus: 'generating',
@@ -154,11 +156,21 @@ export class WorldGenerationService {
             tags: world.tags,
         });
 
-        // 3. 生成封面图（异步，不阻塞）
-        log.step(3, 3, '启动封面图生成（异步）...');
+        // 3. 生成旅行器
+        log.step(3, 4, '调用 AI 生成旅行器...');
+        const vehicleResult = await this.generateTravelVehicle(world);
+        if (vehicleResult.success && vehicleResult.data) {
+            world.travelVehicle = vehicleResult.data;
+            log.info(`🚀 旅行器生成成功: ${vehicleResult.data.name}`);
+        } else {
+            log.warn('旅行器生成失败，但世界创建继续');
+        }
+
+        // 4. 生成封面图（异步，不阻塞）
+        log.step(4, 4, '启动封面图生成（异步）...');
         this.generateWorldCoverAsync(world);
 
-        // 4. 更新状态为 ready
+        // 5. 更新状态为 ready
         world.generationStatus = 'ready';
         log.info(`✨ 世界基础生成完成: ${world.name}`);
 
@@ -167,6 +179,77 @@ export class WorldGenerationService {
             data: world,
             usage: descResult.usage,
         };
+    }
+
+    /**
+     * 生成旅行器
+     */
+    async generateTravelVehicle(world: World): Promise<GenerateResult<TravelVehicle>> {
+        log.info(`🚀 开始生成旅行器 (世界: ${world.name})...`);
+
+        // 1. 生成旅行器描述
+        const startTime = Date.now();
+        const vehicleResult = await ai_generate.travelVehicle(world, this.config.ai);
+        const elapsed = Date.now() - startTime;
+
+        if (!vehicleResult.success || !vehicleResult.data) {
+            log.error('AI 生成旅行器失败', vehicleResult.error);
+            return {
+                success: false,
+                error: vehicleResult.error || 'Failed to generate travel vehicle',
+            };
+        }
+
+        log.info(`旅行器描述生成成功 (${elapsed}ms)`, {
+            name: vehicleResult.data.name,
+            type: vehicleResult.data.type,
+        });
+
+        // 2. 创建旅行器对象
+        const vehicle: TravelVehicle = {
+            id: generateId('vehicle_'),
+            ...vehicleResult.data,
+            image: undefined,
+            createdAt: now(),
+            generationStatus: 'generating_image',
+        };
+
+        // 3. 生成旅行器图片（异步）
+        this.generateTravelVehicleImageAsync(vehicle, world.name);
+
+        vehicle.generationStatus = 'ready';
+        log.info(`✨ 旅行器创建完成: ${vehicle.name}`);
+
+        return {
+            success: true,
+            data: vehicle,
+            usage: vehicleResult.usage,
+        };
+    }
+
+    /**
+     * 异步生成旅行器图片
+     */
+    private async generateTravelVehicleImageAsync(vehicle: TravelVehicle, worldName: string): Promise<void> {
+        try {
+            const result = await imageGenerator.travelVehicle(
+                {
+                    name: vehicle.name,
+                    type: vehicle.type,
+                    appearance: vehicle.appearance,
+                    abilities: vehicle.abilities,
+                },
+                worldName,
+                this.config.image
+            );
+
+            if (result.success && result.url) {
+                vehicle.image = result.url;
+                log.info(`旅行器图片生成成功: ${vehicle.name}`);
+            }
+        } catch (error) {
+            log.error(`旅行器图片生成失败: ${vehicle.name}`, error);
+        }
     }
 
     /**

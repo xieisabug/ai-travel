@@ -130,6 +130,35 @@ Style: travel poster art, inspiring, adventurous mood.
 High quality illustration.`;
 }
 
+/**
+ * 生成旅行器图片的提示词
+ */
+export function buildTravelVehiclePrompt(vehicle: {
+    name: string;
+    type: string;
+    appearance: string;
+    abilities: string[];
+}, worldName: string): string {
+    return `A magnificent ${vehicle.type} named ${vehicle.name} in the fantasy world of ${worldName}.
+Appearance: ${vehicle.appearance}
+Special abilities: ${vehicle.abilities.join(', ')}.
+Style: detailed fantasy vehicle design, epic scale, cinematic lighting.
+Show the vehicle in its full glory, suitable for traveling through fantastical landscapes.
+High quality, 8K resolution.`;
+}
+
+// ============================================
+// 日志工具
+// ============================================
+
+const imageLogger = {
+    prompt: (label: string, prompt: string) => {
+        console.log(`\n[Image-Generate] ========== ${label} - PROMPT ==========`);
+        console.log(prompt);
+        console.log(`[Image-Generate] ========== END PROMPT ==========\n`);
+    },
+};
+
 // ============================================
 // 占位图生成（用于开发阶段）
 // ============================================
@@ -156,12 +185,13 @@ export function getPlaceholderImage(
 
 /**
  * 生成图片
- * 
+ *
  * @param prompt 图片生成提示词
  * @param config 配置
  * @param options 选项
+ * @param logLabel 日志标签
  * @returns 生成结果
- * 
+ *
  * @example
  * ```ts
  * const result = await image_generate(
@@ -169,7 +199,7 @@ export function getPlaceholderImage(
  *   { apiKey: 'xxx' },
  *   { width: 1920, height: 1080 }
  * );
- * 
+ *
  * if (result.success) {
  *   console.log('Generated image URL:', result.url);
  * }
@@ -178,14 +208,18 @@ export function getPlaceholderImage(
 export async function image_generate(
     prompt: string,
     config: ImageGenerateConfig,
-    options: ImageGenerateOptions = {}
+    options: ImageGenerateOptions = {},
+    logLabel: string = '图片生成'
 ): Promise<ImageGenerateResult> {
     const startTime = Date.now();
     const { width = 1024, height = 768, style = 'fantasy' } = options;
 
+    // 打印图片生成 prompt
+    imageLogger.prompt(logLabel, prompt);
+
     // ========================================
     // TODO: 在这里实现实际的图片生成逻辑
-    // 
+    //
     // 可选的实现方式：
     // 1. Cloudflare Workers AI - 使用 @cf/stabilityai/stable-diffusion-xl-base-1.0
     // 2. OpenAI DALL-E 3
@@ -194,17 +228,17 @@ export async function image_generate(
     // 5. 其他图片生成服务
     //
     // 示例实现（使用 Cloudflare Workers AI）:
-    // 
+    //
     // const response = await env.AI.run('@cf/stabilityai/stable-diffusion-xl-base-1.0', {
     //     prompt: prompt,
     //     width: width,
     //     height: height,
     // });
-    // 
+    //
     // // 将图片保存到 R2
     // const imageKey = `images/${Date.now()}.png`;
     // await env.BUCKET.put(imageKey, response);
-    // 
+    //
     // return {
     //     success: true,
     //     url: `${config.cdnBaseUrl}/${imageKey}`,
@@ -231,20 +265,22 @@ export async function image_generate(
 
 /**
  * 并发生成多张图片
- * 
+ *
  * @param prompts 提示词数组
  * @param config 配置
  * @param options 选项
+ * @param logLabel 日志标签前缀
  * @returns 生成结果数组
  */
 export async function image_generate_batch(
     prompts: string[],
     config: ImageGenerateConfig,
-    options: ImageGenerateOptions = {}
+    options: ImageGenerateOptions = {},
+    logLabel: string = '批量图片'
 ): Promise<ImageGenerateResult[]> {
     // 并发执行所有生成任务
     const results = await Promise.all(
-        prompts.map(prompt => image_generate(prompt, config, options))
+        prompts.map((prompt, index) => image_generate(prompt, config, options, `${logLabel}-${index + 1}`))
     );
 
     return results;
@@ -268,7 +304,7 @@ export async function image_generate_world_cover(
         height: 1080,
         style: 'fantasy',
         ...options,
-    });
+    }, `世界封面-${world.name}`);
 }
 
 /**
@@ -286,7 +322,7 @@ export async function image_generate_spot(
         height: 900,
         style: 'fantasy',
         ...options,
-    });
+    }, `景点图片-${spot.name}`);
 }
 
 /**
@@ -304,7 +340,7 @@ export async function image_generate_npc_portrait(
         height: 768,
         style: 'anime',
         ...options,
-    });
+    }, `NPC立绘-${npc.name}`);
 }
 
 /**
@@ -322,7 +358,25 @@ export async function image_generate_project_cover(
         height: 675,
         style: 'fantasy',
         ...options,
-    });
+    }, `项目封面-${project.name}`);
+}
+
+/**
+ * 生成旅行器图片
+ */
+export async function image_generate_travel_vehicle(
+    vehicle: Parameters<typeof buildTravelVehiclePrompt>[0],
+    worldName: string,
+    config: ImageGenerateConfig,
+    options?: ImageGenerateOptions
+): Promise<ImageGenerateResult> {
+    const prompt = buildTravelVehiclePrompt(vehicle, worldName);
+    return image_generate(prompt, config, {
+        width: 1600,
+        height: 900,
+        style: 'fantasy',
+        ...options,
+    }, `旅行器图片-${vehicle.name}`);
 }
 
 // ============================================
@@ -336,12 +390,14 @@ export const imageGenerator = {
     spot: image_generate_spot,
     npcPortrait: image_generate_npc_portrait,
     projectCover: image_generate_project_cover,
+    travelVehicle: image_generate_travel_vehicle,
     // 辅助函数
     buildPrompt: {
         worldCover: buildWorldCoverPrompt,
         spot: buildSpotImagePrompt,
         npcPortrait: buildNPCPortraitPrompt,
         projectCover: buildProjectCoverPrompt,
+        travelVehicle: buildTravelVehiclePrompt,
     },
     placeholder: getPlaceholderImage,
 };
