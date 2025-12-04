@@ -8,7 +8,6 @@
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 import path from 'path';
 import fs from 'fs';
-import type { GameSave } from '~/types/game';
 import type { World, TravelSession } from '~/types/world';
 import type { IStorageProvider, StorageConfig, ExportData } from './types';
 
@@ -53,15 +52,6 @@ async function initDatabase(customPath?: string): Promise<SqlJsDatabase> {
         }
 
         // 创建表
-        dbInstance.run(`
-            CREATE TABLE IF NOT EXISTS saves (
-                id TEXT PRIMARY KEY,
-                data TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        `);
-
         dbInstance.run(`
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -133,39 +123,6 @@ export class SQLiteStorageProvider implements IStorageProvider {
             this.initialized = true;
         }
         return dbInstance!;
-    }
-
-    // ============================================
-    // 存档操作
-    // ============================================
-
-    async getSave(id: string): Promise<GameSave | null> {
-        const db = await this.getDb();
-        const result = db.exec(`SELECT data FROM saves WHERE id = ?`, [id]);
-        if (result.length === 0 || result[0].values.length === 0) return null;
-        return JSON.parse(result[0].values[0][0] as string);
-    }
-
-    async getAllSaves(): Promise<GameSave[]> {
-        const db = await this.getDb();
-        const result = db.exec(`SELECT data FROM saves ORDER BY updated_at DESC`);
-        if (result.length === 0) return [];
-        return result[0].values.map((row: unknown[]) => JSON.parse(row[0] as string));
-    }
-
-    async saveSave(save: GameSave): Promise<void> {
-        const db = await this.getDb();
-        db.run(
-            `INSERT OR REPLACE INTO saves (id, data, created_at, updated_at) VALUES (?, ?, ?, ?)`,
-            [save.id, JSON.stringify(save), save.createdAt, save.updatedAt]
-        );
-        saveToFile();
-    }
-
-    async deleteSave(id: string): Promise<void> {
-        const db = await this.getDb();
-        db.run(`DELETE FROM saves WHERE id = ?`, [id]);
-        saveToFile();
     }
 
     // ============================================
@@ -271,7 +228,6 @@ export class SQLiteStorageProvider implements IStorageProvider {
 
     async clear(): Promise<void> {
         const db = await this.getDb();
-        db.run(`DELETE FROM saves`);
         db.run(`DELETE FROM settings`);
         db.run(`DELETE FROM worlds`);
         db.run(`DELETE FROM sessions`);
@@ -279,7 +235,6 @@ export class SQLiteStorageProvider implements IStorageProvider {
     }
 
     async export(): Promise<string> {
-        const saves = await this.getAllSaves();
         const worlds = await this.getAllWorlds();
         const db = await this.getDb();
 
@@ -292,10 +247,9 @@ export class SQLiteStorageProvider implements IStorageProvider {
             }
         }
 
-        const exportData: ExportData & { worlds: World[] } = {
+        const exportData: ExportData = {
             version: this.version,
             exportedAt: new Date().toISOString(),
-            saves,
             settings,
             worlds,
         };
@@ -304,12 +258,7 @@ export class SQLiteStorageProvider implements IStorageProvider {
     }
 
     async import(data: string): Promise<void> {
-        const parsed = JSON.parse(data) as ExportData & { worlds?: World[] };
-
-        // 导入存档
-        for (const save of parsed.saves) {
-            await this.saveSave(save);
-        }
+        const parsed = JSON.parse(data) as ExportData;
 
         // 导入设置
         for (const [key, value] of Object.entries(parsed.settings)) {

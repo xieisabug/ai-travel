@@ -10,7 +10,7 @@ import {
     WorldGenerationService,
     type WorldServiceConfig,
 } from '~/lib/ai/world-service';
-import { CloudflareKVProvider, type KVNamespace } from '~/lib/storage/cloudflare-kv';
+import { CloudflareKVProvider, type KVNamespace } from './storage/cloudflare-kv';
 import type {
     World,
     TravelProject,

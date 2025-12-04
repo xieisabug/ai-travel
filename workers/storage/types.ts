@@ -2,7 +2,6 @@
  * 存储提供者类型定义
  */
 
-import type { GameSave } from '~/types/game';
 import type { World, TravelSession } from '~/types/world';
 
 /**
@@ -10,6 +9,7 @@ import type { World, TravelSession } from '~/types/world';
  */
 export interface StorageConfig {
     version?: number;
+    prefix?: string;
 }
 
 /**
@@ -18,20 +18,14 @@ export interface StorageConfig {
 export interface ExportData {
     version: number;
     exportedAt: string;
-    saves: GameSave[];
     settings: Record<string, unknown>;
+    worlds: World[];
 }
 
 /**
  * 存储提供者接口
  */
 export interface IStorageProvider {
-    // 存档操作
-    getSave(id: string): Promise<GameSave | null>;
-    getAllSaves(): Promise<GameSave[]>;
-    saveSave(save: GameSave): Promise<void>;
-    deleteSave(id: string): Promise<void>;
-
     // 设置操作
     getSetting<T>(key: string): Promise<T | null>;
     setSetting<T>(key: string, value: T): Promise<void>;

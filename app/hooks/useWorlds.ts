@@ -40,7 +40,7 @@ const initialState: WorldsState = {
 };
 
 // 轮询间隔（毫秒）
-const POLL_INTERVAL = 1000;
+const POLL_INTERVAL = 10000;
 
 export function useWorlds() {
     const [state, setState] = useState<WorldsState>(initialState);
