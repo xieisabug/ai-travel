@@ -14,500 +14,6 @@ const generationSteps = [
   { id: 5, label: '绘制图片素材', icon: '🎨' },
 ];
 
-// 页面样式
-const pageStyles = `
-  .worlds-page {
-    min-height: 100vh;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-    color: #fff;
-    padding: 2rem;
-  }
-
-  .loading, .preparing, .generating {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .loading-spinner, .preparing-container, .generating-container {
-    text-align: center;
-  }
-
-  .generating-container {
-    max-width: 600px;
-    width: 100%;
-    padding: 2rem;
-  }
-
-  .generating-header {
-    margin-bottom: 3rem;
-  }
-
-  .generating-header h1 {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-    background: linear-gradient(135deg, #4ecca3 0%, #45b7d1 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .generating-header p {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 1.1rem;
-  }
-
-  .generation-progress {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 16px;
-    padding: 2rem;
-    margin-bottom: 2rem;
-  }
-
-  .progress-steps {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .step {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    position: relative;
-    opacity: 0.4;
-    transition: all 0.3s ease;
-  }
-
-  .step.completed, .step.active {
-    opacity: 1;
-  }
-
-  .step-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    flex-shrink: 0;
-    transition: all 0.3s ease;
-  }
-
-  .step.completed .step-icon {
-    background: linear-gradient(135deg, #4ecca3 0%, #45b7d1 100%);
-    color: #fff;
-  }
-
-  .step.active .step-icon {
-    background: rgba(78, 204, 163, 0.2);
-    border: 2px solid #4ecca3;
-    animation: pulse-icon 1.5s ease-in-out infinite;
-  }
-
-  @keyframes pulse-icon {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(78, 204, 163, 0.4); }
-    50% { transform: scale(1.05); box-shadow: 0 0 20px 5px rgba(78, 204, 163, 0.2); }
-  }
-
-  .step-label {
-    font-size: 1rem;
-    font-weight: 500;
-  }
-
-  .step.completed .step-label {
-    color: #4ecca3;
-  }
-
-  .step.active .step-label {
-    color: #fff;
-  }
-
-  .step-connector {
-    position: absolute;
-    left: 23px;
-    top: 48px;
-    width: 2px;
-    height: calc(100% + 1rem);
-    background: rgba(255, 255, 255, 0.1);
-    transition: background 0.3s ease;
-  }
-
-  .step-connector.completed {
-    background: #4ecca3;
-  }
-
-  .current-step-info {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    color: #4ecca3;
-    font-size: 1.1rem;
-  }
-
-  .pulse-dot {
-    width: 12px;
-    height: 12px;
-    background: #4ecca3;
-    border-radius: 50%;
-    animation: pulse-dot 1s ease-in-out infinite;
-  }
-
-  @keyframes pulse-dot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.8); }
-  }
-
-  .generating-tips {
-    background: rgba(78, 204, 163, 0.1);
-    border: 1px solid rgba(78, 204, 163, 0.2);
-    border-radius: 12px;
-    padding: 1.5rem;
-  }
-
-  .generating-tips p {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 0.9rem;
-    margin: 0.25rem 0;
-  }
-
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(255,255,255,0.2);
-    border-top-color: #4ecca3;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
-  }
-
-  .spinner.large {
-    width: 60px;
-    height: 60px;
-  }
-
-  .spinner.small {
-    width: 16px;
-    height: 16px;
-    border-width: 2px;
-    display: inline-block;
-    margin-right: 0.5rem;
-    vertical-align: middle;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .page-header {
-    text-align: center;
-    margin-bottom: 2rem;
-    position: relative;
-  }
-
-  .page-header h1 {
-    font-size: 2.5rem;
-    margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, #4ecca3 0%, #45b7d1 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .home-button, .back-button {
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.2);
-    color: #fff;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s;
-  }
-
-  .home-button:hover, .back-button:hover {
-    background: rgba(255,255,255,0.2);
-  }
-
-  .page-header .home-button {
-    position: absolute;
-    top: 0;
-    left: 0;
-  }
-
-  .error-message {
-    background: rgba(255,107,107,0.2);
-    border: 1px solid #ff6b6b;
-    color: #ff6b6b;
-    padding: 1rem;
-    border-radius: 8px;
-    margin-bottom: 1rem;
-    cursor: pointer;
-    text-align: center;
-  }
-
-  .actions-section {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-
-  .generate-button {
-    background: linear-gradient(135deg, #4ecca3 0%, #45b7d1 100%);
-    border: none;
-    color: #fff;
-    padding: 1rem 2rem;
-    font-size: 1.2rem;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.3s;
-    display: inline-flex;
-    align-items: center;
-    font-weight: 600;
-    box-shadow: 0 4px 15px rgba(78, 204, 163, 0.3);
-  }
-
-  .generate-button:hover:not(:disabled) {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(78,204,163,0.4);
-  }
-
-  .generate-button:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-
-  .worlds-section, .projects-section {
-    max-width: 1200px;
-    margin: 0 auto;
-  }
-
-  .worlds-section h2, .projects-section h2 {
-    margin-bottom: 1rem;
-    color: #4ecca3;
-  }
-
-  .section-hint {
-    color: rgba(255,255,255,0.6);
-    margin-bottom: 1.5rem;
-  }
-
-  .empty-state {
-    text-align: center;
-    padding: 3rem;
-    background: rgba(255,255,255,0.05);
-    border-radius: 16px;
-    color: rgba(255,255,255,0.6);
-  }
-
-  .worlds-grid, .projects-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-  }
-
-  .world-card, .project-card {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 16px;
-    overflow: hidden;
-    cursor: pointer;
-    transition: all 0.3s;
-  }
-
-  .world-card:hover, .project-card:hover {
-    transform: translateY(-4px);
-    border-color: #4ecca3;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-  }
-
-  .world-image, .project-image {
-    width: 100%;
-    height: 180px;
-    object-fit: cover;
-  }
-
-  .world-image.placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #2a2a4a 0%, #1a1a3a 100%);
-    font-size: 4rem;
-  }
-
-  .world-content, .project-content {
-    padding: 1.5rem;
-  }
-
-  .world-content h3, .project-content h3 {
-    margin-bottom: 0.5rem;
-    color: #4ecca3;
-    font-weight: 600;
-  }
-
-  .world-description, .project-summary {
-    color: rgba(255,255,255,0.7);
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.5;
-  }
-
-  .world-meta, .project-meta {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.8rem;
-    color: rgba(255,255,255,0.5);
-  }
-
-  .ready-badge {
-    display: inline-block;
-    margin-top: 0.5rem;
-    padding: 0.25rem 0.5rem;
-    background: rgba(78,204,163,0.2);
-    color: #4ecca3;
-    border-radius: 4px;
-    font-size: 0.8rem;
-  }
-
-  .world-header {
-    margin-bottom: 2rem;
-  }
-
-  .world-info {
-    text-align: center;
-    margin: 1rem 0;
-  }
-
-  .world-info h1 {
-    font-size: 2rem;
-    color: #4ecca3;
-  }
-
-  .world-banner {
-    width: 100%;
-    max-height: 300px;
-    object-fit: cover;
-    border-radius: 16px;
-  }
-
-  .start-travel-form {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 16px;
-    padding: 2rem;
-    margin-top: 2rem;
-    text-align: center;
-  }
-
-  .form-group {
-    margin: 1rem 0;
-  }
-
-  .form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    color: rgba(255,255,255,0.8);
-  }
-
-  .form-group input {
-    width: 100%;
-    max-width: 300px;
-    padding: 0.75rem 1rem;
-    font-size: 1rem;
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 8px;
-    background: rgba(255,255,255,0.1);
-    color: #fff;
-  }
-
-  .form-group input::placeholder {
-    color: rgba(255,255,255,0.4);
-  }
-
-  .form-group input:focus {
-    outline: none;
-    border-color: #4ecca3;
-  }
-
-  .start-button {
-    background: linear-gradient(135deg, #4ecca3 0%, #45b7d1 100%);
-    border: none;
-    color: #fff;
-    padding: 1rem 3rem;
-    font-size: 1.2rem;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.3s;
-    margin-top: 1rem;
-    font-weight: 600;
-    box-shadow: 0 4px 15px rgba(78, 204, 163, 0.3);
-  }
-
-  .start-button:hover:not(:disabled) {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(78,204,163,0.4);
-  }
-
-  .start-button:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-
-  .project-preview {
-    margin-top: 2rem;
-    padding: 1rem;
-    background: rgba(255,255,255,0.05);
-    border-radius: 12px;
-  }
-
-  .project-preview h3 {
-    color: #4ecca3;
-    margin-bottom: 0.5rem;
-  }
-
-  .project-preview p {
-    color: rgba(255,255,255,0.7);
-    font-size: 0.9rem;
-  }
-
-  @media (max-width: 768px) {
-    .worlds-page {
-      padding: 1rem;
-    }
-
-    .page-header h1, .generating-header h1 {
-      font-size: 1.8rem;
-    }
-
-    .page-header .home-button {
-      position: static;
-      margin-bottom: 1rem;
-    }
-
-    .worlds-grid, .projects-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .step-icon {
-      width: 40px;
-      height: 40px;
-      font-size: 1.2rem;
-    }
-
-    .step-connector {
-      left: 19px;
-    }
-  }
-`;
-
 export default function WorldsPage() {
   const navigate = useNavigate();
   const {
@@ -609,12 +115,12 @@ export default function WorldsPage() {
   // 渲染加载状态
   if (isLoading && worlds.length === 0) {
     return (
-      <div className="worlds-page loading">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-          <p>正在探索异世界...</p>
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(102,126,234,0.15),transparent)] pointer-events-none" />
+        <div className="text-center relative z-10">
+          <div className="w-12 h-12 border-4 border-white/20 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-white/70">正在探索异世界...</p>
         </div>
-        <style>{pageStyles}</style>
       </div>
     );
   }
@@ -622,47 +128,51 @@ export default function WorldsPage() {
   // 渲染世界生成中状态
   if (viewState === 'generating') {
     return (
-      <div className="worlds-page generating">
-        <div className="generating-container">
-          <div className="generating-header">
-            <h1>✨ 正在创造新世界</h1>
-            <p>AI 正在为您构建一个独一无二的异世界...</p>
+      <div className="min-h-screen bg-black text-white flex items-center justify-center p-8">
+        <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(102,126,234,0.15),transparent)] pointer-events-none" />
+        <div className="max-w-[600px] w-full p-8 text-center relative z-10">
+          <div className="mb-12">
+            <h1 className="text-4xl font-bold mb-4 bg-gradient-to-br from-indigo-500 to-purple-600 bg-clip-text text-transparent">
+              ✨ 正在创造新世界
+            </h1>
+            <p className="text-white/70 text-lg">AI 正在为您构建一个独一无二的异世界...</p>
           </div>
 
-          <div className="generation-progress">
-            <div className="progress-steps">
+          <div className="bg-white/5 rounded-2xl p-8 mb-8 border border-white/10">
+            <div className="flex flex-col gap-6">
               {generationSteps.map((step, index) => (
                 <div
                   key={step.id}
-                  className={`step ${currentGenStep > index ? 'completed' : ''} ${currentGenStep === index + 1 ? 'active' : ''}`}
+                  className={`flex items-center gap-4 relative transition-all duration-300 ${currentGenStep > index || currentGenStep === index + 1 ? 'opacity-100' : 'opacity-40'}`}
                 >
-                  <div className="step-icon">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0 transition-all duration-300 ${currentGenStep > index ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white' : currentGenStep === index + 1 ? 'bg-indigo-500/20 border-2 border-indigo-500 animate-pulse' : 'bg-white/10'}`}>
                     {currentGenStep > index ? '✓' : step.icon}
                   </div>
-                  <div className="step-label">{step.label}</div>
+                  <div className={`text-base font-medium ${currentGenStep > index ? 'text-indigo-400' : currentGenStep === index + 1 ? 'text-white' : 'text-white/50'}`}>
+                    {step.label}
+                  </div>
                   {index < generationSteps.length - 1 && (
-                    <div className={`step-connector ${currentGenStep > index + 1 ? 'completed' : ''}`}></div>
+                    <div className={`absolute left-[23px] top-12 w-0.5 h-8 transition-all duration-300 ${currentGenStep > index + 1 ? 'bg-indigo-500' : 'bg-white/10'}`} />
                   )}
                 </div>
               ))}
             </div>
 
-            <div className="current-step-info">
+            <div className="flex items-center justify-center gap-3 mt-8 pt-6 border-t border-white/10 text-indigo-400 text-lg">
               {currentGenStep > 0 && currentGenStep <= 5 && (
                 <>
-                  <div className="pulse-dot"></div>
+                  <div className="w-3 h-3 bg-indigo-500 rounded-full animate-pulse" />
                   <span>{generationSteps[currentGenStep - 1]?.label}...</span>
                 </>
               )}
             </div>
           </div>
 
-          <div className="generating-tips">
-            <p>💡 小提示：生成一个完整的世界大约需要 1-2 分钟</p>
-            <p>包含世界设定、多个旅游项目、景点、NPC 和图片</p>
+          <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-6">
+            <p className="text-white/70 text-sm mb-1">💡 小提示：生成一个完整的世界大约需要 1-2 分钟</p>
+            <p className="text-white/70 text-sm">包含世界设定、多个旅游项目、景点、NPC 和图片</p>
           </div>
         </div>
-        <style>{pageStyles}</style>
       </div>
     );
   }
@@ -670,18 +180,18 @@ export default function WorldsPage() {
   // 渲染准备中状态
   if (viewState === 'preparing') {
     return (
-      <div className="worlds-page preparing">
-        <div className="preparing-container">
-          <div className="spinner large"></div>
-          <h2>{preparingMessage}</h2>
+      <div className="min-h-screen bg-black text-white flex items-center justify-center p-8">
+        <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(102,126,234,0.15),transparent)] pointer-events-none" />
+        <div className="text-center relative z-10">
+          <div className="w-16 h-16 border-4 border-white/20 border-t-indigo-500 rounded-full animate-spin mx-auto mb-6" />
+          <h2 className="text-2xl font-bold mb-4">{preparingMessage}</h2>
           {selectedProject && (
-            <div className="project-preview">
-              <h3>{selectedProject.name}</h3>
-              <p>{selectedProject.description}</p>
+            <div className="mt-8 p-6 bg-white/5 rounded-xl border border-white/10">
+              <h3 className="text-indigo-400 font-semibold mb-2">{selectedProject.name}</h3>
+              <p className="text-white/70 text-sm">{selectedProject.description}</p>
             </div>
           )}
         </div>
-        <style>{pageStyles}</style>
       </div>
     );
   }
@@ -689,170 +199,192 @@ export default function WorldsPage() {
   // 渲染项目选择页
   if (viewState === 'projects' && currentWorld) {
     return (
-      <div className="worlds-page projects-view">
-        <div className="world-header">
-          <button className="back-button" onClick={handleBackToWorlds}>
-            ← 返回世界列表
-          </button>
-          <div className="world-info">
-            <h1>{currentWorld.name}</h1>
-            <p className="world-description">{currentWorld.description}</p>
-          </div>
-          {currentWorld.imageUrl && (
-            <img
-              src={currentWorld.imageUrl}
-              alt={currentWorld.name}
-              className="world-banner"
-            />
-          )}
-        </div>
-
-        <div className="projects-section">
-          <h2>🧭 可选旅行项目</h2>
-          <p className="section-hint">选择一个项目开始您的异世界之旅</p>
-
-          {error && (
-            <div className="error-message" onClick={clearError}>
-              {error}（点击关闭）
+      <div className="min-h-screen bg-black text-white p-8">
+        <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(102,126,234,0.15),transparent)] pointer-events-none" />
+        <div className="relative z-10 max-w-6xl mx-auto">
+          <div className="mb-8">
+            <button 
+              className="bg-white/10 border border-white/20 text-white px-4 py-2 rounded-lg cursor-pointer transition-all hover:bg-white/15 hover:border-white/30 mb-6"
+              onClick={handleBackToWorlds}
+            >
+              ← 返回世界列表
+            </button>
+            <div className="text-center mb-6">
+              <h1 className="text-3xl font-bold bg-gradient-to-br from-indigo-500 to-purple-600 bg-clip-text text-transparent mb-2">
+                {currentWorld.name}
+              </h1>
+              <p className="text-white/60 max-w-2xl mx-auto">{currentWorld.description}</p>
             </div>
-          )}
+            {currentWorld.imageUrl && (
+              <img
+                src={currentWorld.imageUrl}
+                alt={currentWorld.name}
+                className="w-full max-h-[300px] object-cover rounded-2xl border border-white/10"
+              />
+            )}
+          </div>
 
-          <div className="projects-grid">
-            {projects.map(project => (
-              <div
-                key={project.id}
-                className={`project-card ${project.generationStatus === 'ready' ? 'ready' : ''}`}
-                onClick={() => handleSelectProject(project)}
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-xl font-semibold text-indigo-400 mb-2">🧭 可选旅行项目</h2>
+            <p className="text-white/50 mb-6">选择一个项目开始您的异世界之旅</p>
+
+            {error && (
+              <div 
+                className="bg-red-500/20 border border-red-500 text-red-400 p-4 rounded-lg mb-6 cursor-pointer text-center"
+                onClick={clearError}
               >
-                {project.coverImage && (
-                  <img
-                    src={project.coverImage}
-                    alt={project.name}
-                    className="project-image"
-                  />
-                )}
-                <div className="project-content">
-                  <h3>{project.name}</h3>
-                  <p className="project-summary">{project.description}</p>
-                  <div className="project-meta">
-                    <span className="difficulty">难度: {project.difficulty}</span>
-                    <span className="duration">
-                      行程: {project.duration || '?'}天
-                    </span>
-                  </div>
-                  {project.generationStatus === 'ready' && (
-                    <span className="ready-badge">✓ 已准备就绪</span>
+                {error}（点击关闭）
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {projects.map(project => (
+                <div
+                  key={project.id}
+                  className="bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/10 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
+                  onClick={() => handleSelectProject(project)}
+                >
+                  {project.coverImage && (
+                    <img
+                      src={project.coverImage}
+                      alt={project.name}
+                      className="w-full h-44 object-cover"
+                    />
                   )}
+                  <div className="p-5">
+                    <h3 className="text-indigo-400 font-semibold mb-2">{project.name}</h3>
+                    <p className="text-white/60 text-sm mb-4 line-clamp-3">{project.description}</p>
+                    <div className="flex justify-between text-xs text-white/40">
+                      <span>难度: {project.difficulty}</span>
+                      <span>行程: {project.duration || '?'}天</span>
+                    </div>
+                    {project.generationStatus === 'ready' && (
+                      <span className="inline-block mt-3 px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs">
+                        ✓ 已准备就绪
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {selectedProject && selectedProject.generationStatus === 'ready' && (
-            <div className="start-travel-form">
-              <h3>准备启程</h3>
-              <div className="form-group">
-                <label htmlFor="playerName">旅行者姓名</label>
-                <input
-                  id="playerName"
-                  type="text"
-                  value={playerName}
-                  onChange={e => setPlayerName(e.target.value)}
-                  placeholder="输入您的名字"
-                  maxLength={20}
-                />
-              </div>
-              <button
-                className="start-button"
-                onClick={handleStartTravel}
-                disabled={!playerName.trim() || isGenerating}
-              >
-                {isGenerating ? '准备中...' : '🚀 开始旅程'}
-              </button>
+              ))}
             </div>
-          )}
+
+            {selectedProject && selectedProject.generationStatus === 'ready' && (
+              <div className="mt-8 p-8 bg-white/5 border border-white/10 rounded-2xl text-center">
+                <h3 className="text-xl font-semibold mb-4">准备启程</h3>
+                <div className="mb-6">
+                  <label htmlFor="playerName" className="block mb-2 text-white/70">旅行者姓名</label>
+                  <input
+                    id="playerName"
+                    type="text"
+                    value={playerName}
+                    onChange={e => setPlayerName(e.target.value)}
+                    placeholder="输入您的名字"
+                    maxLength={20}
+                    className="w-full max-w-[300px] px-4 py-3 bg-white/[0.06] border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500 focus:bg-indigo-500/10 focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  />
+                </div>
+                <button
+                  className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-8 py-4 rounded-full text-lg font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(102,126,234,0.4)] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  onClick={handleStartTravel}
+                  disabled={!playerName.trim() || isGenerating}
+                >
+                  {isGenerating ? '准备中...' : '🚀 开始旅程'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-        <style>{pageStyles}</style>
       </div>
     );
   }
 
   // 渲染世界列表页
   return (
-    <div className="worlds-page worlds-view">
-      <div className="page-header">
-        <h1>🌍 异世界探索</h1>
-        <p>发现由 AI 创造的奇幻世界，开启独一无二的旅程</p>
-        <button className="home-button" onClick={() => navigate('/')}>
-          ← 返回主页
-        </button>
-      </div>
-
-      {error && (
-        <div className="error-message" onClick={clearError}>
-          {error}（点击关闭）
+    <div className="min-h-screen bg-black text-white p-8">
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(102,126,234,0.15),transparent)] pointer-events-none" />
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:60px_60px] pointer-events-none" />
+      
+      <div className="relative z-10 max-w-6xl mx-auto">
+        <div className="text-center mb-8 relative">
+          <button 
+            className="absolute top-0 left-0 bg-white/10 border border-white/20 text-white px-4 py-2 rounded-lg cursor-pointer transition-all hover:bg-white/15 hover:border-white/30"
+            onClick={() => navigate('/')}
+          >
+            ← 返回主页
+          </button>
+          <h1 className="text-4xl font-bold bg-gradient-to-br from-indigo-500 to-purple-600 bg-clip-text text-transparent mb-2">
+            🌍 异世界探索
+          </h1>
+          <p className="text-white/60">发现由 AI 创造的奇幻世界，开启独一无二的旅程</p>
         </div>
-      )}
 
-      <div className="actions-section">
-        <button
-          className="generate-button"
-          onClick={handleGenerateWorld}
-          disabled={isGenerating}
-        >
-          {isGenerating ? (
-            <>
-              <span className="spinner small"></span>
-              正在创造新世界...
-            </>
-          ) : (
-            '✨ 创造新世界'
-          )}
-        </button>
-      </div>
-
-      <div className="worlds-section">
-        <h2>已发现的世界</h2>
-
-        {worlds.length === 0 ? (
-          <div className="empty-state">
-            <p>还没有发现任何世界</p>
-            <p>点击上方按钮创造您的第一个异世界吧！</p>
-          </div>
-        ) : (
-          <div className="worlds-grid">
-            {worlds.map(world => (
-              <div
-                key={world.id}
-                className="world-card"
-                onClick={() => handleSelectWorld(world.id)}
-              >
-                {world.imageUrl ? (
-                  <img
-                    src={world.imageUrl}
-                    alt={world.name}
-                    className="world-image"
-                  />
-                ) : (
-                  <div className="world-image placeholder">
-                    <span>🌌</span>
-                  </div>
-                )}
-                <div className="world-content">
-                  <h3>{world.name}</h3>
-                  <p className="world-description">{world.description}</p>
-                  <div className="world-meta">
-                    <span>{world.travelProjects?.length || 0} 个旅行项目</span>
-                    <span>{world.era || '未知纪元'}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+        {error && (
+          <div 
+            className="bg-red-500/20 border border-red-500 text-red-400 p-4 rounded-lg mb-6 cursor-pointer text-center max-w-xl mx-auto"
+            onClick={clearError}
+          >
+            {error}（点击关闭）
           </div>
         )}
-      </div>
 
-      <style>{pageStyles}</style>
+        <div className="text-center mb-8">
+          <button
+            className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-8 py-4 rounded-full text-lg font-semibold cursor-pointer transition-all inline-flex items-center gap-2 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(102,126,234,0.4)] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+            onClick={handleGenerateWorld}
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                正在创造新世界...
+              </>
+            ) : (
+              '✨ 创造新世界'
+            )}
+          </button>
+        </div>
+
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-xl font-semibold text-indigo-400 mb-4">已发现的世界</h2>
+
+          {worlds.length === 0 ? (
+            <div className="text-center py-12 bg-white/5 rounded-2xl border border-white/10">
+              <p className="text-white/50 mb-2">还没有发现任何世界</p>
+              <p className="text-white/50">点击上方按钮创造您的第一个异世界吧！</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {worlds.map(world => (
+                <div
+                  key={world.id}
+                  className="bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/10 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
+                  onClick={() => handleSelectWorld(world.id)}
+                >
+                  {world.imageUrl ? (
+                    <img
+                      src={world.imageUrl}
+                      alt={world.name}
+                      className="w-full h-44 object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-44 flex items-center justify-center bg-gradient-to-br from-[#2a2a4a] to-[#1a1a3a] text-6xl">
+                      🌌
+                    </div>
+                  )}
+                  <div className="p-5">
+                    <h3 className="text-indigo-400 font-semibold mb-2">{world.name}</h3>
+                    <p className="text-white/60 text-sm mb-4 line-clamp-3 leading-relaxed">{world.description}</p>
+                    <div className="flex justify-between text-xs text-white/40">
+                      <span>{world.travelProjects?.length || 0} 个旅行项目</span>
+                      <span>{world.era || '未知纪元'}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
