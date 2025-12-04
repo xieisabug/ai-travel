@@ -2,7 +2,8 @@
  * 存储提供者类型定义
  */
 
-import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '~/types/world';
+import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '../../app/types/world';
+import type { User, UserSession, UserListParams, PublicUser } from '../../app/types/user';
 
 /**
  * 存储配置
@@ -162,6 +163,24 @@ export interface IStorageProvider {
     getAICall(id: string): Promise<AICallRecord | null>;
     getAICalls(params?: AICallQueryParams): Promise<AICallRecord[]>;
     getAICallStats(params?: AICallQueryParams): Promise<AICallStats>;
+
+    // 用户操作
+    getUser(id: string): Promise<User | null>;
+    getUserByUsername(username: string): Promise<User | null>;
+    getUserByEmail(email: string): Promise<User | null>;
+    getUserByUsernameOrEmail(usernameOrEmail: string): Promise<User | null>;
+    getAllUsers(params?: UserListParams): Promise<{ users: PublicUser[]; total: number }>;
+    saveUser(user: User): Promise<void>;
+    deleteUser(id: string): Promise<void>;
+    updateUserStats(userId: string, worldGenCount: number, resetDate: string): Promise<void>;
+
+    // 用户会话操作
+    getUserSession(id: string): Promise<UserSession | null>;
+    getUserSessionByToken(token: string): Promise<UserSession | null>;
+    saveUserSession(session: UserSession): Promise<void>;
+    deleteUserSession(id: string): Promise<void>;
+    deleteUserSessionsByUserId(userId: string): Promise<void>;
+    cleanExpiredSessions(): Promise<void>;
 
     // 工具方法
     clear(): Promise<void>;

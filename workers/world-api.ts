@@ -9,14 +9,14 @@ import { cors } from 'hono/cors';
 import {
     WorldGenerationService,
     type WorldServiceConfig,
-} from '~/lib/ai/world-service';
+} from '../app/lib/ai/world-service';
 import { CloudflareKVProvider, type KVNamespace } from './storage/cloudflare-kv';
 import type {
     World,
     TravelProject,
     TravelSession,
     GenerateWorldRequest,
-} from '~/types/world';
+} from '../app/types/world';
 
 // ============================================
 // 环境类型定义

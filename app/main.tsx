@@ -8,14 +8,19 @@ import Home from './routes/home';
 import Worlds from './routes/worlds';
 import WorldGame from './routes/world-game';
 
+// 认证 Provider
+import { AuthProvider } from './hooks/useAuth';
+
 function App() {
     return (
         <BrowserRouter>
-            <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/worlds" element={<Worlds />} />
-                <Route path="/world-game" element={<WorldGame />} />
-            </Routes>
+            <AuthProvider>
+                <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/worlds" element={<Worlds />} />
+                    <Route path="/world-game" element={<WorldGame />} />
+                </Routes>
+            </AuthProvider>
         </BrowserRouter>
     );
 }

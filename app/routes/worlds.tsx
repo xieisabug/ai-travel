@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWorlds } from '~/hooks/useWorlds';
+import { useAuthContext, canGenerateWorld, getRemainingWorldGenerations } from '~/hooks/useAuth';
+import { AuthModal, UserInfo } from '~/components/AuthModal';
+import { USER_ROLE_NAMES } from '~/types/user';
 
 type ViewState = 'worlds' | 'world_detail' | 'preparing' | 'generating';
 
@@ -30,13 +33,47 @@ export default function WorldsPage() {
     clearError,
   } = useWorlds();
 
+  const { user, isAuthenticated, isLoading: authLoading, refreshUser } = useAuthContext();
+
   const [viewState, setViewState] = useState<ViewState>('worlds');
-  const [playerName, setPlayerName] = useState('');
   const [preparingMessage, setPreparingMessage] = useState('');
   const [currentGenStep, setCurrentGenStep] = useState(0);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
+
+  // 打开登录弹窗
+  const openAuthModal = (tab: 'login' | 'register' = 'login') => {
+    setAuthModalTab(tab);
+    setShowAuthModal(true);
+  };
+
+  // 关闭登录弹窗并刷新用户信息
+  const handleAuthModalClose = () => {
+    setShowAuthModal(false);
+    refreshUser();
+  };
 
   // 生成新世界
   const handleGenerateWorld = async () => {
+    // 检查登录状态
+    if (!isAuthenticated) {
+      openAuthModal('login');
+      return;
+    }
+
+    // 检查权限
+    if (!canGenerateWorld(user)) {
+      alert('您没有生成世界的权限，请升级到 Pro 会员');
+      return;
+    }
+
+    // 检查每日限额
+    const remaining = getRemainingWorldGenerations(user);
+    if (remaining <= 0) {
+      alert('您今日的世界生成次数已用完，请明天再试或升级会员');
+      return;
+    }
+
     setViewState('generating');
     setCurrentGenStep(1);
 
@@ -54,6 +91,8 @@ export default function WorldsPage() {
 
     if (world) {
       setCurrentGenStep(6);
+      // 刷新用户信息以更新生成次数
+      refreshUser();
       setTimeout(() => {
         setViewState('world_detail');
       }, 1000);
@@ -72,7 +111,16 @@ export default function WorldsPage() {
 
   // 开始旅行（直接开始，不需要选择项目）
   const handleStartTravel = async () => {
-    if (!currentWorld || !playerName.trim()) return;
+    if (!currentWorld) return;
+
+    // 检查登录状态
+    if (!isAuthenticated || !user) {
+      openAuthModal('login');
+      return;
+    }
+
+    // 使用登录用户的显示名称
+    const playerName = user.displayName;
 
     setPreparingMessage('正在准备您的旅程...');
     setViewState('preparing');
@@ -97,7 +145,7 @@ export default function WorldsPage() {
       return;
     }
 
-    const session = await createSession(projectId, playerName.trim());
+    const session = await createSession(projectId, playerName);
     if (session) {
       // 导航到世界游戏页面
       navigate(`/world-game?session=${session.id}`);
@@ -346,25 +394,37 @@ export default function WorldsPage() {
               <p className="text-white/60 mb-6">
                 搭乘 {currentWorld.travelVehicle?.name || '神秘旅行器'}，开启您的异世界之旅
               </p>
-              <div className="mb-6">
-                <label htmlFor="playerName" className="block mb-2 text-white/70">旅行者姓名</label>
-                <input
-                  id="playerName"
-                  type="text"
-                  value={playerName}
-                  onChange={e => setPlayerName(e.target.value)}
-                  placeholder="输入您的名字"
-                  maxLength={20}
-                  className="w-full max-w-[300px] px-4 py-3 bg-white/[0.06] border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-indigo-500 focus:bg-indigo-500/10 focus:ring-4 focus:ring-indigo-500/10 transition-all"
-                />
-              </div>
-              <button
-                className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-8 py-4 rounded-full text-lg font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(102,126,234,0.4)] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                onClick={handleStartTravel}
-                disabled={!playerName.trim() || isGenerating}
-              >
-                {isGenerating ? '准备中...' : '🚀 开始旅程'}
-              </button>
+
+              {isAuthenticated && user ? (
+                <>
+                  <div className="mb-6 flex items-center justify-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white font-bold text-xl">
+                      {user.displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="text-left">
+                      <div className="text-white font-medium">{user.displayName}</div>
+                      <div className="text-xs text-slate-400">{USER_ROLE_NAMES[user.role]}</div>
+                    </div>
+                  </div>
+                  <button
+                    className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-8 py-4 rounded-full text-lg font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(102,126,234,0.4)] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    onClick={handleStartTravel}
+                    disabled={isGenerating}
+                  >
+                    {isGenerating ? '准备中...' : '🚀 开始旅程'}
+                  </button>
+                </>
+              ) : (
+                <div>
+                  <p className="text-white/50 mb-4">登录后即可开始旅行</p>
+                  <button
+                    className="bg-gradient-to-br from-cyan-500 to-blue-500 text-white border-none px-6 py-3 rounded-full font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_15px_30px_rgba(6,182,212,0.3)]"
+                    onClick={() => openAuthModal('login')}
+                  >
+                    登录 / 注册
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -378,14 +438,50 @@ export default function WorldsPage() {
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(102,126,234,0.15),transparent)] pointer-events-none" />
       <div className="fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:60px_60px] pointer-events-none" />
 
+      {/* 认证弹窗 */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={handleAuthModalClose}
+        defaultTab={authModalTab}
+      />
+
       <div className="relative z-10 max-w-6xl mx-auto">
-        <div className="text-center mb-8 relative">
+        {/* 顶部导航栏 */}
+        <div className="flex justify-between items-center mb-8">
           <button
-            className="absolute top-0 left-0 bg-white/10 border border-white/20 text-white px-4 py-2 rounded-lg cursor-pointer transition-all hover:bg-white/15 hover:border-white/30"
+            className="bg-white/10 border border-white/20 text-white px-4 py-2 rounded-lg cursor-pointer transition-all hover:bg-white/15 hover:border-white/30"
             onClick={() => navigate('/')}
           >
             ← 返回主页
           </button>
+
+          {/* 用户信息或登录按钮 */}
+          <div>
+            {authLoading ? (
+              <div className="w-8 h-8 border-2 border-white/20 border-t-cyan-500 rounded-full animate-spin" />
+            ) : isAuthenticated && user ? (
+              <UserInfo />
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  className="px-4 py-2 text-white/70 hover:text-white transition-colors"
+                  onClick={() => openAuthModal('login')}
+                >
+                  登录
+                </button>
+                <button
+                  className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg hover:from-cyan-600 hover:to-blue-600 transition-all"
+                  onClick={() => openAuthModal('register')}
+                >
+                  注册
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 标题 */}
+        <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-br from-indigo-500 to-purple-600 bg-clip-text text-transparent mb-2">
             🌍 异世界探索
           </h1>

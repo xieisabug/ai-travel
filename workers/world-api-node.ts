@@ -7,6 +7,7 @@
  */
 
 import { Hono } from 'hono';
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import {
     WorldGenerationService,
     type WorldServiceConfig,
@@ -15,11 +16,32 @@ import { getStorage } from './storage/sqlite';
 import { taskQueue, type Task } from './task-queue';
 import { apiLogger } from './logger';
 import { configureAICallRecorder } from '../app/lib/ai/ai-call-recorder';
+import {
+    hashPassword,
+    verifyPassword,
+    generateUserId,
+    createUserSession,
+    isSessionExpired,
+    toCurrentUser,
+    validateUsername,
+    validateEmail,
+    validatePassword,
+    getTodayDateString,
+    shouldResetStats,
+} from './auth';
 import type {
     World,
     TravelProject,
     GenerateWorldRequest,
 } from '../app/types/world';
+import type {
+    User,
+    LoginRequest,
+    RegisterRequest,
+    CurrentUser,
+    UserRole,
+} from '../app/types/user';
+import { ROLE_PERMISSIONS } from '../app/types/user';
 
 // 配置 AI 调用记录器
 configureAICallRecorder({
@@ -39,6 +61,41 @@ const worldApi = new Hono();
 // ============================================
 // 辅助函数
 // ============================================
+
+/** Cookie 名称 */
+const AUTH_COOKIE_NAME = 'ai_travel_token';
+/** Cookie 有效期（7天） */
+const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+
+/**
+ * 从请求中获取当前用户
+ */
+async function getCurrentUserFromRequest(c: any): Promise<CurrentUser | null> {
+    const token = getCookie(c, AUTH_COOKIE_NAME);
+    if (!token) return null;
+
+    const storage = getStorage();
+    const session = await storage.getUserSessionByToken(token);
+    if (!session || isSessionExpired(session)) {
+        if (session) {
+            await storage.deleteUserSession(session.id);
+        }
+        return null;
+    }
+
+    const user = await storage.getUser(session.userId);
+    if (!user || !user.isActive) return null;
+
+    // 检查是否需要重置统计
+    if (shouldResetStats(user)) {
+        user.todayWorldGenerationCount = 0;
+        user.statsResetDate = getTodayDateString();
+        user.updatedAt = new Date().toISOString();
+        await storage.saveUser(user);
+    }
+
+    return toCurrentUser(user);
+}
 
 /**
  * 获取世界生成服务
@@ -149,20 +206,47 @@ worldApi.get('/worlds/:id', async (c) => {
 /**
  * 生成新世界（异步）
  * POST /api/worlds/generate
- * 
+ *
  * 返回任务 ID，客户端通过 GET /api/tasks/:id 查询进度
+ * 需要管理员权限
  */
 worldApi.post('/worlds/generate', async (c) => {
     try {
+        // 权限检查：需要登录且有生成世界权限
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ error: '请先登录' }, 401);
+        }
+
+        if (!currentUser.permissions.canGenerateWorld) {
+            return c.json({ error: '您没有生成世界的权限，请升级到 Pro 会员' }, 403);
+        }
+
+        // 检查每日生成限制
+        const dailyLimit = currentUser.permissions.dailyWorldGenerationLimit;
+        if (dailyLimit !== -1 && currentUser.todayWorldGenerationCount >= dailyLimit) {
+            return c.json({
+                error: `您今日的世界生成次数已用完（${dailyLimit}次/天），请明天再试或升级会员`
+            }, 403);
+        }
+
         const body = await c.req.json<GenerateWorldRequest>().catch(() => ({}));
 
         apiLogger.separator('创建世界生成任务');
         apiLogger.info('📝 请求参数', body);
+        apiLogger.info(`👤 操作用户: ${currentUser.username} (${currentUser.role})`);
+
+        // 更新用户的生成次数统计（在创建任务前立即更新，防止并发问题）
+        const storage = getStorage();
+        await storage.updateUserStats(
+            currentUser.id,
+            currentUser.todayWorldGenerationCount + 1,
+            getTodayDateString()
+        );
 
         // 创建异步任务
         const task = taskQueue.createTask<World>('generate_world', async (updateProgress) => {
             const service = getWorldService();
-            const storage = getStorage();
 
             // 步骤 1: 生成世界描述
             updateProgress({ current: 1, total: 4, message: '正在生成世界描述...' });
@@ -634,6 +718,420 @@ worldApi.post('/sessions/:id/memories', async (c) => {
 });
 
 // ============================================
+// 用户认证 API
+// ============================================
+
+/**
+ * 用户注册
+ * POST /api/auth/register
+ */
+worldApi.post('/auth/register', async (c) => {
+    try {
+        const body = await c.req.json<RegisterRequest>();
+        apiLogger.info('📝 用户注册请求', { username: body.username, email: body.email });
+
+        // 验证输入
+        const usernameValidation = validateUsername(body.username);
+        if (!usernameValidation.valid) {
+            return c.json({ success: false, error: usernameValidation.error }, 400);
+        }
+
+        const emailValidation = validateEmail(body.email);
+        if (!emailValidation.valid) {
+            return c.json({ success: false, error: emailValidation.error }, 400);
+        }
+
+        const passwordValidation = validatePassword(body.password);
+        if (!passwordValidation.valid) {
+            return c.json({ success: false, error: passwordValidation.error }, 400);
+        }
+
+        const storage = getStorage();
+
+        // 检查用户名是否已存在
+        const existingByUsername = await storage.getUserByUsername(body.username);
+        if (existingByUsername) {
+            return c.json({ success: false, error: '用户名已被使用' }, 400);
+        }
+
+        // 检查邮箱是否已存在
+        const existingByEmail = await storage.getUserByEmail(body.email);
+        if (existingByEmail) {
+            return c.json({ success: false, error: '邮箱已被注册' }, 400);
+        }
+
+        // 创建用户
+        const now = new Date().toISOString();
+        const user: User = {
+            id: generateUserId(),
+            username: body.username,
+            displayName: body.displayName || body.username,
+            email: body.email,
+            passwordHash: hashPassword(body.password),
+            role: 'free',
+            isActive: true,
+            todayWorldGenerationCount: 0,
+            statsResetDate: getTodayDateString(),
+            createdAt: now,
+            updatedAt: now,
+        };
+
+        await storage.saveUser(user);
+        apiLogger.info(`✅ 用户注册成功: ${user.username} (${user.id})`);
+
+        // 创建会话
+        const userAgent = c.req.header('user-agent');
+        const session = createUserSession(user.id, userAgent);
+        await storage.saveUserSession(session);
+
+        // 设置 Cookie
+        setCookie(c, AUTH_COOKIE_NAME, session.token, {
+            httpOnly: true,
+            secure: false, // 开发环境使用 http
+            sameSite: 'Lax',
+            maxAge: COOKIE_MAX_AGE,
+            path: '/',
+        });
+
+        return c.json({
+            success: true,
+            user: toCurrentUser(user),
+            token: session.token,
+        });
+    } catch (error) {
+        apiLogger.error('用户注册失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '注册失败',
+        }, 500);
+    }
+});
+
+/**
+ * 用户登录
+ * POST /api/auth/login
+ */
+worldApi.post('/auth/login', async (c) => {
+    try {
+        const body = await c.req.json<LoginRequest>();
+        apiLogger.info('🔐 用户登录请求', { usernameOrEmail: body.usernameOrEmail });
+
+        if (!body.usernameOrEmail || !body.password) {
+            return c.json({ success: false, error: '请输入用户名/邮箱和密码' }, 400);
+        }
+
+        const storage = getStorage();
+        const user = await storage.getUserByUsernameOrEmail(body.usernameOrEmail);
+
+        if (!user) {
+            return c.json({ success: false, error: '用户名或密码错误' }, 401);
+        }
+
+        if (!user.isActive) {
+            return c.json({ success: false, error: '账户已被禁用' }, 403);
+        }
+
+        if (!verifyPassword(body.password, user.passwordHash || '')) {
+            return c.json({ success: false, error: '用户名或密码错误' }, 401);
+        }
+
+        // 检查是否需要重置统计
+        if (shouldResetStats(user)) {
+            user.todayWorldGenerationCount = 0;
+            user.statsResetDate = getTodayDateString();
+        }
+
+        // 更新最后登录时间
+        user.lastLoginAt = new Date().toISOString();
+        user.updatedAt = new Date().toISOString();
+        await storage.saveUser(user);
+
+        // 创建会话
+        const userAgent = c.req.header('user-agent');
+        const session = createUserSession(user.id, userAgent);
+        await storage.saveUserSession(session);
+
+        apiLogger.info(`✅ 用户登录成功: ${user.username}`);
+
+        // 设置 Cookie
+        setCookie(c, AUTH_COOKIE_NAME, session.token, {
+            httpOnly: true,
+            secure: false,
+            sameSite: 'Lax',
+            maxAge: COOKIE_MAX_AGE,
+            path: '/',
+        });
+
+        return c.json({
+            success: true,
+            user: toCurrentUser(user),
+            token: session.token,
+        });
+    } catch (error) {
+        apiLogger.error('用户登录失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '登录失败',
+        }, 500);
+    }
+});
+
+/**
+ * 用户登出
+ * POST /api/auth/logout
+ */
+worldApi.post('/auth/logout', async (c) => {
+    try {
+        const token = getCookie(c, AUTH_COOKIE_NAME);
+        if (token) {
+            const storage = getStorage();
+            const session = await storage.getUserSessionByToken(token);
+            if (session) {
+                await storage.deleteUserSession(session.id);
+            }
+        }
+
+        deleteCookie(c, AUTH_COOKIE_NAME, { path: '/' });
+
+        return c.json({ success: true });
+    } catch (error) {
+        apiLogger.error('用户登出失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '登出失败',
+        }, 500);
+    }
+});
+
+/**
+ * 获取当前用户信息
+ * GET /api/auth/me
+ */
+worldApi.get('/auth/me', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '未登录' }, 401);
+        }
+
+        return c.json({
+            success: true,
+            user: currentUser,
+        });
+    } catch (error) {
+        apiLogger.error('获取当前用户信息失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '获取用户信息失败',
+        }, 500);
+    }
+});
+
+/**
+ * 修改密码
+ * POST /api/auth/change-password
+ */
+worldApi.post('/auth/change-password', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '未登录' }, 401);
+        }
+
+        const body = await c.req.json<{ oldPassword: string; newPassword: string }>();
+
+        const passwordValidation = validatePassword(body.newPassword);
+        if (!passwordValidation.valid) {
+            return c.json({ success: false, error: passwordValidation.error }, 400);
+        }
+
+        const storage = getStorage();
+        const user = await storage.getUser(currentUser.id);
+        if (!user) {
+            return c.json({ success: false, error: '用户不存在' }, 404);
+        }
+
+        if (!verifyPassword(body.oldPassword, user.passwordHash || '')) {
+            return c.json({ success: false, error: '原密码错误' }, 400);
+        }
+
+        user.passwordHash = hashPassword(body.newPassword);
+        user.updatedAt = new Date().toISOString();
+        await storage.saveUser(user);
+
+        // 登出所有其他会话
+        await storage.deleteUserSessionsByUserId(user.id);
+
+        // 创建新会话
+        const userAgent = c.req.header('user-agent');
+        const session = createUserSession(user.id, userAgent);
+        await storage.saveUserSession(session);
+
+        setCookie(c, AUTH_COOKIE_NAME, session.token, {
+            httpOnly: true,
+            secure: false,
+            sameSite: 'Lax',
+            maxAge: COOKIE_MAX_AGE,
+            path: '/',
+        });
+
+        apiLogger.info(`✅ 用户修改密码成功: ${user.username}`);
+
+        return c.json({ success: true, token: session.token });
+    } catch (error) {
+        apiLogger.error('修改密码失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '修改密码失败',
+        }, 500);
+    }
+});
+
+// ============================================
+// 用户管理 API (管理员)
+// ============================================
+
+/**
+ * 获取用户列表 (管理员)
+ * GET /api/admin/users
+ */
+worldApi.get('/admin/users', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '未登录' }, 401);
+        }
+
+        if (!currentUser.permissions.canViewAllUsers) {
+            return c.json({ success: false, error: '无权限' }, 403);
+        }
+
+        const params = {
+            page: parseInt(c.req.query('page') || '1'),
+            pageSize: parseInt(c.req.query('pageSize') || '20'),
+            search: c.req.query('search'),
+            role: c.req.query('role') as UserRole | undefined,
+            isActive: c.req.query('isActive') ? c.req.query('isActive') === 'true' : undefined,
+        };
+
+        const storage = getStorage();
+        const result = await storage.getAllUsers(params);
+
+        return c.json({
+            success: true,
+            ...result,
+            page: params.page,
+            pageSize: params.pageSize,
+        });
+    } catch (error) {
+        apiLogger.error('获取用户列表失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '获取用户列表失败',
+        }, 500);
+    }
+});
+
+/**
+ * 更新用户角色 (管理员)
+ * PUT /api/admin/users/:id/role
+ */
+worldApi.put('/admin/users/:id/role', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '未登录' }, 401);
+        }
+
+        if (!currentUser.permissions.canManageUsers) {
+            return c.json({ success: false, error: '无权限' }, 403);
+        }
+
+        const { id } = c.req.param();
+        const body = await c.req.json<{ role: UserRole }>();
+
+        if (!['free', 'pro', 'pro_plus', 'admin'].includes(body.role)) {
+            return c.json({ success: false, error: '无效的用户角色' }, 400);
+        }
+
+        // 不能修改自己的角色
+        if (id === currentUser.id) {
+            return c.json({ success: false, error: '不能修改自己的角色' }, 400);
+        }
+
+        const storage = getStorage();
+        const user = await storage.getUser(id);
+        if (!user) {
+            return c.json({ success: false, error: '用户不存在' }, 404);
+        }
+
+        user.role = body.role;
+        user.updatedAt = new Date().toISOString();
+        await storage.saveUser(user);
+
+        apiLogger.info(`✅ 管理员 ${currentUser.username} 将用户 ${user.username} 的角色修改为 ${body.role}`);
+
+        return c.json({ success: true });
+    } catch (error) {
+        apiLogger.error('更新用户角色失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '更新用户角色失败',
+        }, 500);
+    }
+});
+
+/**
+ * 禁用/启用用户 (管理员)
+ * PUT /api/admin/users/:id/status
+ */
+worldApi.put('/admin/users/:id/status', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '未登录' }, 401);
+        }
+
+        if (!currentUser.permissions.canManageUsers) {
+            return c.json({ success: false, error: '无权限' }, 403);
+        }
+
+        const { id } = c.req.param();
+        const body = await c.req.json<{ isActive: boolean }>();
+
+        // 不能禁用自己
+        if (id === currentUser.id) {
+            return c.json({ success: false, error: '不能禁用自己的账户' }, 400);
+        }
+
+        const storage = getStorage();
+        const user = await storage.getUser(id);
+        if (!user) {
+            return c.json({ success: false, error: '用户不存在' }, 404);
+        }
+
+        user.isActive = body.isActive;
+        user.updatedAt = new Date().toISOString();
+        await storage.saveUser(user);
+
+        // 如果禁用用户，删除其所有会话
+        if (!body.isActive) {
+            await storage.deleteUserSessionsByUserId(id);
+        }
+
+        apiLogger.info(`✅ 管理员 ${currentUser.username} ${body.isActive ? '启用' : '禁用'} 了用户 ${user.username}`);
+
+        return c.json({ success: true });
+    } catch (error) {
+        apiLogger.error('更新用户状态失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '更新用户状态失败',
+        }, 500);
+    }
+});
+
+// ============================================
 // 健康检查
 // ============================================
 
@@ -644,5 +1142,8 @@ worldApi.get('/health', (c) => {
         timestamp: new Date().toISOString(),
     });
 });
+
+// 导出 getCurrentUserFromRequest 供其他地方使用
+export { getCurrentUserFromRequest };
 
 export default worldApi;

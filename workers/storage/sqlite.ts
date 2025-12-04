@@ -8,7 +8,8 @@
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 import path from 'path';
 import fs from 'fs';
-import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '~/types/world';
+import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '../../app/types/world';
+import type { User, UserSession, UserListParams, PublicUser } from '../../app/types/user';
 import type {
     IStorageProvider,
     StorageConfig,
@@ -240,11 +241,50 @@ function createTables(db: SqlJsDatabase): void {
         )
     `);
 
+    // 用户表
+    db.run(`
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            username TEXT NOT NULL UNIQUE,
+            display_name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'free',
+            avatar TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            last_login_at TEXT,
+            today_world_generation_count INTEGER DEFAULT 0,
+            stats_reset_date TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    `);
+
+    // 用户会话表
+    db.run(`
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            user_agent TEXT,
+            ip_address TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+
     // 创建索引
     db.run(`CREATE INDEX IF NOT EXISTS idx_vehicles_world ON vehicles(world_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_projects_world ON projects(world_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_spots_project ON spots(project_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_npcs_spot ON npcs(spot_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_sessions_token ON user_sessions(token)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_player ON sessions(player_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_world ON sessions(world_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_ai_calls_type ON ai_calls(type)`);
@@ -1008,6 +1048,229 @@ export class SQLiteStorageProvider implements IStorageProvider {
     }
 
     // ============================================
+    // 用户操作
+    // ============================================
+
+    async getUser(id: string): Promise<User | null> {
+        const db = await this.getDb();
+        const result = db.exec(`SELECT * FROM users WHERE id = ?`, [id]);
+        if (result.length === 0 || result[0].values.length === 0) return null;
+        return this.rowToUser(result[0].columns, result[0].values[0]);
+    }
+
+    async getUserByUsername(username: string): Promise<User | null> {
+        const db = await this.getDb();
+        const result = db.exec(`SELECT * FROM users WHERE username = ?`, [username]);
+        if (result.length === 0 || result[0].values.length === 0) return null;
+        return this.rowToUser(result[0].columns, result[0].values[0]);
+    }
+
+    async getUserByEmail(email: string): Promise<User | null> {
+        const db = await this.getDb();
+        const result = db.exec(`SELECT * FROM users WHERE email = ?`, [email]);
+        if (result.length === 0 || result[0].values.length === 0) return null;
+        return this.rowToUser(result[0].columns, result[0].values[0]);
+    }
+
+    async getUserByUsernameOrEmail(usernameOrEmail: string): Promise<User | null> {
+        const db = await this.getDb();
+        const result = db.exec(
+            `SELECT * FROM users WHERE username = ? OR email = ?`,
+            [usernameOrEmail, usernameOrEmail]
+        );
+        if (result.length === 0 || result[0].values.length === 0) return null;
+        return this.rowToUser(result[0].columns, result[0].values[0]);
+    }
+
+    async getAllUsers(params: UserListParams = {}): Promise<{ users: PublicUser[]; total: number }> {
+        const db = await this.getDb();
+        const conditions: string[] = [];
+        const values: (string | number | null)[] = [];
+
+        if (params.search) {
+            conditions.push(`(username LIKE ? OR display_name LIKE ? OR email LIKE ?)`);
+            const searchPattern = `%${params.search}%`;
+            values.push(searchPattern, searchPattern, searchPattern);
+        }
+        if (params.role) {
+            conditions.push(`role = ?`);
+            values.push(params.role);
+        }
+        if (params.isActive !== undefined) {
+            conditions.push(`is_active = ?`);
+            values.push(params.isActive ? 1 : 0);
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        // 获取总数
+        const countResult = db.exec(
+            `SELECT COUNT(*) FROM users ${whereClause}`,
+            values as (string | number | null | Uint8Array)[]
+        );
+        const total = countResult[0]?.values[0]?.[0] as number || 0;
+
+        // 获取分页数据
+        const page = params.page || 1;
+        const pageSize = params.pageSize || 20;
+        const offset = (page - 1) * pageSize;
+
+        const result = db.exec(
+            `SELECT * FROM users ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            [...values, pageSize, offset] as (string | number | null | Uint8Array)[]
+        );
+
+        if (result.length === 0) {
+            return { users: [], total };
+        }
+
+        const users = result[0].values.map(row => {
+            const user = this.rowToUser(result[0].columns, row);
+            // 移除密码哈希
+            const { passwordHash: _, ...publicUser } = user;
+            return publicUser as PublicUser;
+        });
+
+        return { users, total };
+    }
+
+    async saveUser(user: User): Promise<void> {
+        const db = await this.getDb();
+        db.run(`
+            INSERT OR REPLACE INTO users (
+                id, username, display_name, email, password_hash, role, avatar,
+                is_active, last_login_at, today_world_generation_count, stats_reset_date,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            user.id,
+            user.username,
+            user.displayName,
+            user.email,
+            user.passwordHash || '',
+            user.role,
+            user.avatar || null,
+            user.isActive ? 1 : 0,
+            user.lastLoginAt || null,
+            user.todayWorldGenerationCount,
+            user.statsResetDate,
+            user.createdAt,
+            user.updatedAt,
+        ]);
+        saveToFile();
+    }
+
+    async deleteUser(id: string): Promise<void> {
+        const db = await this.getDb();
+        db.run(`DELETE FROM users WHERE id = ?`, [id]);
+        saveToFile();
+    }
+
+    async updateUserStats(userId: string, worldGenCount: number, resetDate: string): Promise<void> {
+        const db = await this.getDb();
+        db.run(
+            `UPDATE users SET today_world_generation_count = ?, stats_reset_date = ?, updated_at = ? WHERE id = ?`,
+            [worldGenCount, resetDate, new Date().toISOString(), userId]
+        );
+        saveToFile();
+    }
+
+    private rowToUser(columns: string[], row: unknown[]): User {
+        const obj: Record<string, unknown> = {};
+        columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
+
+        return {
+            id: obj.id as string,
+            username: obj.username as string,
+            displayName: obj.display_name as string,
+            email: obj.email as string,
+            passwordHash: obj.password_hash as string,
+            role: obj.role as User['role'],
+            avatar: obj.avatar as string | undefined,
+            isActive: obj.is_active === 1,
+            lastLoginAt: obj.last_login_at as string | undefined,
+            todayWorldGenerationCount: obj.today_world_generation_count as number,
+            statsResetDate: obj.stats_reset_date as string,
+            createdAt: obj.created_at as string,
+            updatedAt: obj.updated_at as string,
+        };
+    }
+
+    // ============================================
+    // 用户会话操作
+    // ============================================
+
+    async getUserSession(id: string): Promise<UserSession | null> {
+        const db = await this.getDb();
+        const result = db.exec(`SELECT * FROM user_sessions WHERE id = ?`, [id]);
+        if (result.length === 0 || result[0].values.length === 0) return null;
+        return this.rowToUserSession(result[0].columns, result[0].values[0]);
+    }
+
+    async getUserSessionByToken(token: string): Promise<UserSession | null> {
+        const db = await this.getDb();
+        const result = db.exec(`SELECT * FROM user_sessions WHERE token = ?`, [token]);
+        if (result.length === 0 || result[0].values.length === 0) return null;
+        return this.rowToUserSession(result[0].columns, result[0].values[0]);
+    }
+
+    async saveUserSession(session: UserSession): Promise<void> {
+        const db = await this.getDb();
+        db.run(`
+            INSERT OR REPLACE INTO user_sessions (
+                id, user_id, token, expires_at, user_agent, ip_address, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+            session.id,
+            session.userId,
+            session.token,
+            session.expiresAt,
+            session.userAgent || null,
+            session.ipAddress || null,
+            session.createdAt,
+        ]);
+        saveToFile();
+    }
+
+    async deleteUserSession(id: string): Promise<void> {
+        const db = await this.getDb();
+        db.run(`DELETE FROM user_sessions WHERE id = ?`, [id]);
+        saveToFile();
+    }
+
+    async deleteUserSessionsByUserId(userId: string): Promise<void> {
+        const db = await this.getDb();
+        db.run(`DELETE FROM user_sessions WHERE user_id = ?`, [userId]);
+        saveToFile();
+    }
+
+    async cleanExpiredSessions(): Promise<void> {
+        const db = await this.getDb();
+        const now = new Date().toISOString();
+        db.run(`DELETE FROM user_sessions WHERE expires_at < ?`, [now]);
+        saveToFile();
+    }
+
+    private rowToUserSession(columns: string[], row: unknown[]): UserSession {
+        const obj: Record<string, unknown> = {};
+        columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
+
+        return {
+            id: obj.id as string,
+            userId: obj.user_id as string,
+            token: obj.token as string,
+            expiresAt: obj.expires_at as string,
+            userAgent: obj.user_agent as string | undefined,
+            ipAddress: obj.ip_address as string | undefined,
+            createdAt: obj.created_at as string,
+        };
+    }
+
+    // ============================================
     // 工具方法
     // ============================================
 
@@ -1021,6 +1284,8 @@ export class SQLiteStorageProvider implements IStorageProvider {
         db.run(`DELETE FROM vehicles`);
         db.run(`DELETE FROM sessions`);
         db.run(`DELETE FROM worlds`);
+        db.run(`DELETE FROM user_sessions`);
+        db.run(`DELETE FROM users`);
         saveToFile();
     }
 

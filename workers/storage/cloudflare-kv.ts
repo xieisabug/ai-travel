@@ -5,7 +5,7 @@
  * 适用于 Cloudflare Workers 环境
  */
 
-import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '~/types/world';
+import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '../../app/types/world';
 import type { IStorageProvider, StorageConfig, ExportData, AICallRecord, AICallQueryParams, AICallStats } from './types';
 
 // ============================================
