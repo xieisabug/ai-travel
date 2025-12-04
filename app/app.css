@@ -65,3 +65,47 @@ body {
 .animate-spin-slowest {
   animation: spin 40s linear infinite;
 }
+
+/* ============================================
+   管理员表单样式
+   ============================================ */
+
+.form-input {
+  @apply w-full bg-white/[0.06] border border-white/10 rounded-xl px-4 py-3 text-base text-white transition-all;
+  @apply placeholder:text-white/30;
+  @apply focus:outline-none focus:border-indigo-500 focus:bg-indigo-500/10 focus:ring-4 focus:ring-indigo-500/10;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.form-input:is(textarea) {
+  @apply resize-y min-h-[80px];
+}
+
+.form-input:is(select) {
+  @apply cursor-pointer appearance-none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

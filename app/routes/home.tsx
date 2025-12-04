@@ -25,7 +25,7 @@ const testimonials = [
 
 export default function Home() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthContext();
+  const { isAuthenticated, user } = useAuthContext();
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [authDefaultTab, setAuthDefaultTab] = useState<'login' | 'register'>('login');
   const [activeWorld, setActiveWorld] = useState(0);
@@ -70,7 +70,18 @@ export default function Home() {
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 transition-all group-hover:w-full" />
           </a>
           {isAuthenticated ? (
-            <UserInfo />
+            <div className="flex items-center gap-4">
+              {user?.role === 'admin' && (
+                <button
+                  onClick={() => navigate('/admin/worlds')}
+                  className="text-white/70 text-sm font-medium hover:text-white transition-colors relative group"
+                >
+                  管理后台
+                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 transition-all group-hover:w-full" />
+                </button>
+              )}
+              <UserInfo />
+            </div>
           ) : (
             <button
               className="bg-white/10 text-white border border-white/20 px-5 py-2 rounded-full text-sm font-medium cursor-pointer transition-all hover:bg-white/15 hover:border-white/30"

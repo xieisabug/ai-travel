@@ -1132,6 +1132,118 @@ worldApi.put('/admin/users/:id/status', async (c) => {
 });
 
 // ============================================
+// 世界管理 API (管理员)
+// ============================================
+
+/**
+ * 更新世界 (管理员)
+ * PUT /api/admin/worlds/:id
+ */
+worldApi.put('/admin/worlds/:id', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '未登录' }, 401);
+        }
+
+        if (currentUser.role !== 'admin') {
+            return c.json({ success: false, error: '无权限' }, 403);
+        }
+
+        const { id } = c.req.param();
+        const body = await c.req.json<World>();
+
+        const storage = getStorage();
+        const existingWorld = await storage.getWorld(id);
+        if (!existingWorld) {
+            return c.json({ success: false, error: '世界不存在' }, 404);
+        }
+
+        // 更新世界数据
+        const updatedWorld: World = {
+            ...body,
+            id, // 确保 ID 不变
+            createdAt: existingWorld.createdAt, // 保留创建时间
+        };
+
+        await storage.saveWorld(updatedWorld);
+
+        apiLogger.info(`✅ 管理员 ${currentUser.username} 更新了世界: ${updatedWorld.name}`);
+
+        return c.json({ success: true, world: updatedWorld });
+    } catch (error) {
+        apiLogger.error('更新世界失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '更新世界失败',
+        }, 500);
+    }
+});
+
+/**
+ * 上传图片 (管理员)
+ * POST /api/upload
+ */
+worldApi.post('/upload', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '未登录' }, 401);
+        }
+
+        if (currentUser.role !== 'admin') {
+            return c.json({ success: false, error: '无权限' }, 403);
+        }
+
+        const formData = await c.req.formData();
+        const file = formData.get('file') as File;
+
+        if (!file) {
+            return c.json({ success: false, error: '未提供文件' }, 400);
+        }
+
+        // 验证文件类型
+        if (!file.type.startsWith('image/')) {
+            return c.json({ success: false, error: '只能上传图片文件' }, 400);
+        }
+
+        // 验证文件大小 (最大 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            return c.json({ success: false, error: '文件大小不能超过 10MB' }, 400);
+        }
+
+        // 生成文件名
+        const ext = file.name.split('.').pop() || 'png';
+        const fileName = `upload_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+
+        // 保存到 public/uploads 目录
+        const fs = await import('fs');
+        const path = await import('path');
+
+        const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+
+        const filePath = path.join(uploadsDir, fileName);
+        const buffer = Buffer.from(await file.arrayBuffer());
+        fs.writeFileSync(filePath, buffer);
+
+        const url = `/uploads/${fileName}`;
+
+        apiLogger.info(`✅ 管理员 ${currentUser.username} 上传了图片: ${fileName}`);
+
+        return c.json({ success: true, url });
+    } catch (error) {
+        apiLogger.error('上传图片失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '上传图片失败',
+        }, 500);
+    }
+});
+
+// ============================================
 // 健康检查
 // ============================================
 

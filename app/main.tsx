@@ -7,6 +7,7 @@ import './app.css';
 import Home from './routes/home';
 import Worlds from './routes/worlds';
 import WorldGame from './routes/world-game';
+import AdminWorlds from './routes/admin/worlds';
 
 // 认证 Provider
 import { AuthProvider } from './hooks/useAuth';
@@ -19,6 +20,7 @@ function App() {
                     <Route path="/" element={<Home />} />
                     <Route path="/worlds" element={<Worlds />} />
                     <Route path="/world-game" element={<WorldGame />} />
+                    <Route path="/admin/worlds" element={<AdminWorlds />} />
                 </Routes>
             </AuthProvider>
         </BrowserRouter>
