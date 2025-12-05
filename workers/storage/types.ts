@@ -4,6 +4,7 @@
 
 import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '../../app/types/world';
 import type { User, UserSession, UserListParams, PublicUser } from '../../app/types/user';
+import type { CurrencyTransaction, CurrencyTransactionType, DailyClaimResult } from '../../app/types/currency';
 
 /**
  * 存储配置
@@ -173,6 +174,25 @@ export interface IStorageProvider {
     saveUser(user: User): Promise<void>;
     deleteUser(id: string): Promise<void>;
     updateUserStats(userId: string, worldGenCount: number, resetDate: string): Promise<void>;
+
+    // 货币操作
+    /** 领取每日登录奖励 */
+    claimDailyBonus(userId: string): Promise<DailyClaimResult>;
+    /** 更新用户货币余额 (创建交易记录) */
+    updateCurrencyBalance(
+        userId: string,
+        amount: number,
+        type: CurrencyTransactionType,
+        description: string,
+        referenceId?: string,
+        referenceType?: 'world' | 'session' | 'item'
+    ): Promise<{ newBalance: number; transaction: CurrencyTransaction }>;
+    /** 获取用户交易记录 */
+    getCurrencyTransactions(
+        userId: string,
+        limit?: number,
+        offset?: number
+    ): Promise<{ transactions: CurrencyTransaction[]; total: number }>;
 
     // 用户会话操作
     getUserSession(id: string): Promise<UserSession | null>;

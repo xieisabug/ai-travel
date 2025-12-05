@@ -10,6 +10,8 @@ import path from 'path';
 import fs from 'fs';
 import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '../../app/types/world';
 import type { User, UserSession, UserListParams, PublicUser } from '../../app/types/user';
+import type { CurrencyTransaction, CurrencyTransactionType, DailyClaimResult } from '../../app/types/currency';
+import { DAILY_CLAIM_AMOUNT } from '../../app/types/currency';
 import type {
     IStorageProvider,
     StorageConfig,
@@ -27,6 +29,179 @@ import type {
 let dbInstance: SqlJsDatabase | null = null;
 let dbPath: string = '';
 let initPromise: Promise<SqlJsDatabase> | null = null;
+
+// ============================================
+// 数据库版本和迁移系统
+// ============================================
+
+/** 当前数据库 schema 版本 */
+const CURRENT_DB_VERSION = 2;
+
+/**
+ * 数据库迁移定义
+ * key 是目标版本号，value 是从上一版本迁移到该版本的 SQL 语句
+ */
+const migrations: Record<number, string[]> = {
+    // 版本 1: 初始版本（通过 createTables 创建）
+    1: [],
+
+    // 版本 2: 添加货币系统字段
+    2: [
+        // 添加 currency_balance 列到 users 表
+        `ALTER TABLE users ADD COLUMN currency_balance INTEGER NOT NULL DEFAULT 0`,
+        // 添加 last_daily_claim_date 列到 users 表
+        `ALTER TABLE users ADD COLUMN last_daily_claim_date TEXT`,
+        // 创建货币交易记录表
+        `CREATE TABLE IF NOT EXISTS currency_transactions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            balance_after INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            reference_id TEXT,
+            reference_type TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_currency_transactions_user ON currency_transactions(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_currency_transactions_created ON currency_transactions(created_at)`,
+    ],
+};
+
+/**
+ * 获取当前数据库版本
+ */
+function getDbVersion(db: SqlJsDatabase): number {
+    try {
+        const result = db.exec(`SELECT value FROM settings WHERE key = 'db_version'`);
+        if (result.length > 0 && result[0].values.length > 0) {
+            return parseInt(result[0].values[0][0] as string, 10) || 0;
+        }
+    } catch {
+        // settings 表可能不存在
+    }
+    return 0;
+}
+
+/**
+ * 设置数据库版本
+ */
+function setDbVersion(db: SqlJsDatabase, version: number): void {
+    db.run(`INSERT OR REPLACE INTO settings (key, value) VALUES ('db_version', ?)`, [version.toString()]);
+}
+
+/**
+ * 检查列是否存在
+ */
+function columnExists(db: SqlJsDatabase, tableName: string, columnName: string): boolean {
+    try {
+        const result = db.exec(`PRAGMA table_info(${tableName})`);
+        if (result.length > 0) {
+            const columns = result[0].values.map(row => row[1] as string);
+            return columns.includes(columnName);
+        }
+    } catch {
+        // 表可能不存在
+    }
+    return false;
+}
+
+/**
+ * 检查表是否存在
+ */
+function tableExists(db: SqlJsDatabase, tableName: string): boolean {
+    try {
+        const result = db.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName]);
+        return result.length > 0 && result[0].values.length > 0;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * 运行数据库迁移
+ */
+function runMigrations(db: SqlJsDatabase): void {
+    let currentVersion = getDbVersion(db);
+
+    // 如果版本为 0，说明是新数据库或从未设置过版本
+    // 检查 users 表是否存在来判断是否是全新数据库
+    if (currentVersion === 0) {
+        if (tableExists(db, 'users')) {
+            // 旧数据库，从未记录版本，假设是版本 1
+            console.log('[SQLite] 检测到旧数据库，设置初始版本为 1');
+            setDbVersion(db, 1);
+            currentVersion = 1;
+        } else {
+            // 全新数据库，createTables 刚创建了表，设置版本为 1
+            console.log('[SQLite] 新数据库，设置初始版本为 1');
+            setDbVersion(db, 1);
+            currentVersion = 1;
+        }
+    }
+
+    console.log(`[SQLite] 当前数据库版本: ${currentVersion}, 目标版本: ${CURRENT_DB_VERSION}`);
+
+    if (currentVersion >= CURRENT_DB_VERSION) {
+        console.log('[SQLite] 数据库已是最新版本');
+        return;
+    }
+
+    console.log(`[SQLite] 开始数据库迁移: ${currentVersion} -> ${CURRENT_DB_VERSION}`);
+
+    for (let version = currentVersion + 1; version <= CURRENT_DB_VERSION; version++) {
+        const migrationSqls = migrations[version] || [];
+        console.log(`[SQLite] 执行迁移到版本 ${version} (${migrationSqls.length} 条语句)`);
+
+        for (const sql of migrationSqls) {
+            try {
+                // 特殊处理 ALTER TABLE ADD COLUMN - 检查列是否已存在
+                const alterMatch = sql.match(/ALTER TABLE (\w+) ADD COLUMN (\w+)/i);
+                if (alterMatch) {
+                    const [, tableName, columnName] = alterMatch;
+                    if (columnExists(db, tableName, columnName)) {
+                        console.log(`[SQLite] 列 ${tableName}.${columnName} 已存在，跳过`);
+                        continue;
+                    }
+                }
+
+                // 特殊处理 CREATE TABLE IF NOT EXISTS
+                const createTableMatch = sql.match(/CREATE TABLE IF NOT EXISTS (\w+)/i);
+                if (createTableMatch) {
+                    const tableName = createTableMatch[1];
+                    if (tableExists(db, tableName)) {
+                        console.log(`[SQLite] 表 ${tableName} 已存在，跳过`);
+                        continue;
+                    }
+                }
+
+                // 特殊处理 CREATE INDEX IF NOT EXISTS
+                if (sql.includes('CREATE INDEX IF NOT EXISTS')) {
+                    // CREATE INDEX IF NOT EXISTS 会自动处理，直接执行
+                }
+
+                db.run(sql);
+                console.log(`[SQLite] ✓ 执行成功`);
+            } catch (err) {
+                const error = err as Error;
+                // 如果是"列已存在"或"表已存在"错误，忽略
+                if (error.message?.includes('duplicate column name') ||
+                    error.message?.includes('already exists')) {
+                    console.log(`[SQLite] ⚠ 跳过 (已存在): ${error.message}`);
+                    continue;
+                }
+                console.error(`[SQLite] ✗ 迁移失败:`, error.message);
+                throw error;
+            }
+        }
+
+        setDbVersion(db, version);
+        console.log(`[SQLite] ✓ 迁移到版本 ${version} 完成`);
+    }
+
+    console.log('[SQLite] ✓ 所有迁移完成');
+}
 
 async function initDatabase(customPath?: string): Promise<SqlJsDatabase> {
     if (dbInstance) return dbInstance;
@@ -60,10 +235,13 @@ async function initDatabase(customPath?: string): Promise<SqlJsDatabase> {
             dbInstance = new SQL.Database();
         }
 
-        // 创建表
+        // 创建基础表结构
         createTables(dbInstance);
 
-        // 保存初始数据库
+        // 运行数据库迁移
+        runMigrations(dbInstance);
+
+        // 保存数据库
         saveToFile();
 
         console.log('[SQLite] 数据库初始化完成 ✓');
@@ -241,7 +419,8 @@ function createTables(db: SqlJsDatabase): void {
         )
     `);
 
-    // 用户表
+    // 用户表 (基础结构，不包含通过迁移添加的列)
+    // 注意：currency_balance 和 last_daily_claim_date 通过迁移 v2 添加
     db.run(`
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
@@ -257,6 +436,22 @@ function createTables(db: SqlJsDatabase): void {
             stats_reset_date TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        )
+    `);
+
+    // 货币交易记录表 (通过迁移 v2 创建，这里保留以支持新数据库)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS currency_transactions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            balance_after INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            reference_id TEXT,
+            reference_type TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     `);
 
@@ -290,6 +485,8 @@ function createTables(db: SqlJsDatabase): void {
     db.run(`CREATE INDEX IF NOT EXISTS idx_ai_calls_type ON ai_calls(type)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_ai_calls_world ON ai_calls(world_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_ai_calls_created ON ai_calls(created_at)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_currency_transactions_user ON currency_transactions(user_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_currency_transactions_created ON currency_transactions(created_at)`);
 }
 
 function saveToFile(): void {
@@ -1140,8 +1337,8 @@ export class SQLiteStorageProvider implements IStorageProvider {
             INSERT OR REPLACE INTO users (
                 id, username, display_name, email, password_hash, role, avatar,
                 is_active, last_login_at, today_world_generation_count, stats_reset_date,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                currency_balance, last_daily_claim_date, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             user.id,
             user.username,
@@ -1154,6 +1351,8 @@ export class SQLiteStorageProvider implements IStorageProvider {
             user.lastLoginAt || null,
             user.todayWorldGenerationCount,
             user.statsResetDate,
+            user.currencyBalance || 0,
+            user.lastDailyClaimDate || null,
             user.createdAt,
             user.updatedAt,
         ]);
@@ -1175,6 +1374,184 @@ export class SQLiteStorageProvider implements IStorageProvider {
         saveToFile();
     }
 
+    // ============================================
+    // 货币操作
+    // ============================================
+
+    /**
+     * 获取今天的日期字符串 (YYYY-MM-DD)
+     */
+    private getTodayDateString(): string {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+
+    /**
+     * 生成交易记录 ID
+     */
+    private generateTransactionId(): string {
+        return `txn_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    }
+
+    /**
+     * 领取每日登录奖励
+     */
+    async claimDailyBonus(userId: string): Promise<DailyClaimResult> {
+        const user = await this.getUser(userId);
+        if (!user) {
+            return { claimed: false, amount: 0, newBalance: 0 };
+        }
+
+        const today = this.getTodayDateString();
+
+        // 检查今天是否已经领取过
+        if (user.lastDailyClaimDate === today) {
+            return { claimed: false, amount: 0, newBalance: user.currencyBalance };
+        }
+
+        // 发放每日奖励
+        const result = await this.updateCurrencyBalance(
+            userId,
+            DAILY_CLAIM_AMOUNT,
+            'daily_claim',
+            `每日登录奖励 (${today})`
+        );
+
+        // 更新最后领取日期
+        const db = await this.getDb();
+        db.run(
+            `UPDATE users SET last_daily_claim_date = ?, updated_at = ? WHERE id = ?`,
+            [today, new Date().toISOString(), userId]
+        );
+        saveToFile();
+
+        return {
+            claimed: true,
+            amount: DAILY_CLAIM_AMOUNT,
+            newBalance: result.newBalance,
+        };
+    }
+
+    /**
+     * 更新用户货币余额 (同时创建交易记录)
+     */
+    async updateCurrencyBalance(
+        userId: string,
+        amount: number,
+        type: CurrencyTransactionType,
+        description: string,
+        referenceId?: string,
+        referenceType?: 'world' | 'session' | 'item'
+    ): Promise<{ newBalance: number; transaction: CurrencyTransaction }> {
+        const db = await this.getDb();
+        const user = await this.getUser(userId);
+
+        if (!user) {
+            throw new Error('用户不存在');
+        }
+
+        const newBalance = user.currencyBalance + amount;
+
+        // 防止余额变为负数
+        if (newBalance < 0) {
+            throw new Error('余额不足');
+        }
+
+        // 创建交易记录
+        const transaction: CurrencyTransaction = {
+            id: this.generateTransactionId(),
+            userId,
+            amount,
+            balanceAfter: newBalance,
+            type,
+            description,
+            referenceId,
+            referenceType,
+            createdAt: new Date().toISOString(),
+        };
+
+        // 更新用户余额
+        db.run(
+            `UPDATE users SET currency_balance = ?, updated_at = ? WHERE id = ?`,
+            [newBalance, new Date().toISOString(), userId]
+        );
+
+        // 插入交易记录
+        db.run(`
+            INSERT INTO currency_transactions (
+                id, user_id, amount, balance_after, type, description,
+                reference_id, reference_type, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            transaction.id,
+            transaction.userId,
+            transaction.amount,
+            transaction.balanceAfter,
+            transaction.type,
+            transaction.description,
+            transaction.referenceId || null,
+            transaction.referenceType || null,
+            transaction.createdAt,
+        ]);
+
+        saveToFile();
+
+        return { newBalance, transaction };
+    }
+
+    /**
+     * 获取用户交易记录
+     */
+    async getCurrencyTransactions(
+        userId: string,
+        limit: number = 20,
+        offset: number = 0
+    ): Promise<{ transactions: CurrencyTransaction[]; total: number }> {
+        const db = await this.getDb();
+
+        // 获取总数
+        const countResult = db.exec(
+            `SELECT COUNT(*) FROM currency_transactions WHERE user_id = ?`,
+            [userId]
+        );
+        const total = countResult[0]?.values[0]?.[0] as number || 0;
+
+        // 获取交易记录
+        const result = db.exec(
+            `SELECT * FROM currency_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            [userId, limit, offset]
+        );
+
+        if (result.length === 0) {
+            return { transactions: [], total };
+        }
+
+        const transactions = result[0].values.map(row =>
+            this.rowToTransaction(result[0].columns, row)
+        );
+
+        return { transactions, total };
+    }
+
+    private rowToTransaction(columns: string[], row: unknown[]): CurrencyTransaction {
+        const obj: Record<string, unknown> = {};
+        columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
+
+        return {
+            id: obj.id as string,
+            userId: obj.user_id as string,
+            amount: obj.amount as number,
+            balanceAfter: obj.balance_after as number,
+            type: obj.type as CurrencyTransactionType,
+            description: obj.description as string,
+            referenceId: obj.reference_id as string | undefined,
+            referenceType: obj.reference_type as 'world' | 'session' | 'item' | undefined,
+            createdAt: obj.created_at as string,
+        };
+    }
+
     private rowToUser(columns: string[], row: unknown[]): User {
         const obj: Record<string, unknown> = {};
         columns.forEach((col, i) => {
@@ -1193,6 +1570,8 @@ export class SQLiteStorageProvider implements IStorageProvider {
             lastLoginAt: obj.last_login_at as string | undefined,
             todayWorldGenerationCount: obj.today_world_generation_count as number,
             statsResetDate: obj.stats_reset_date as string,
+            currencyBalance: (obj.currency_balance as number) || 0,
+            lastDailyClaimDate: obj.last_daily_claim_date as string | undefined,
             createdAt: obj.created_at as string,
             updatedAt: obj.updated_at as string,
         };
@@ -1284,6 +1663,7 @@ export class SQLiteStorageProvider implements IStorageProvider {
         db.run(`DELETE FROM vehicles`);
         db.run(`DELETE FROM sessions`);
         db.run(`DELETE FROM worlds`);
+        db.run(`DELETE FROM currency_transactions`);
         db.run(`DELETE FROM user_sessions`);
         db.run(`DELETE FROM users`);
         saveToFile();

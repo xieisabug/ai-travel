@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useWorlds } from '~/hooks/useWorlds';
 import { useAuthContext, canGenerateWorld, getRemainingWorldGenerations } from '~/hooks/useAuth';
 import { AuthModal, UserInfo } from '~/components/AuthModal';
-import { USER_ROLE_NAMES } from '~/types/user';
+import { CurrencyDisplay } from '~/components/CurrencyDisplay';
+import { DailyRewardToast } from '~/components/DailyRewardToast';
+import { USER_ROLE_NAMES, type LoginResponse } from '~/types/user';
 
 type ViewState = 'worlds' | 'world_detail' | 'preparing' | 'generating';
 
@@ -41,16 +43,30 @@ export default function WorldsPage() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
 
+  // 每日奖励通知状态
+  const [dailyReward, setDailyReward] = useState<{ show: boolean; amount: number }>({
+    show: false,
+    amount: 0,
+  });
+
   // 打开登录弹窗
   const openAuthModal = (tab: 'login' | 'register' = 'login') => {
     setAuthModalTab(tab);
     setShowAuthModal(true);
   };
 
-  // 关闭登录弹窗并刷新用户信息
-  const handleAuthModalClose = () => {
+  // 关闭登录弹窗并刷新用户信息，处理每日奖励
+  const handleAuthModalClose = (loginResponse?: LoginResponse) => {
     setShowAuthModal(false);
     refreshUser();
+
+    // 如果登录响应包含每日奖励信息，显示通知
+    if (loginResponse?.dailyRewardClaimed && loginResponse?.dailyRewardAmount) {
+      setDailyReward({
+        show: true,
+        amount: loginResponse.dailyRewardAmount,
+      });
+    }
   };
 
   // 生成新世界
@@ -456,11 +472,14 @@ export default function WorldsPage() {
           </button>
 
           {/* 用户信息或登录按钮 */}
-          <div>
+          <div className="flex items-center gap-4">
             {authLoading ? (
               <div className="w-8 h-8 border-2 border-white/20 border-t-cyan-500 rounded-full animate-spin" />
             ) : isAuthenticated && user ? (
-              <UserInfo />
+              <>
+                <CurrencyDisplay />
+                <UserInfo />
+              </>
             ) : (
               <div className="flex gap-2">
                 <button
@@ -479,6 +498,14 @@ export default function WorldsPage() {
             )}
           </div>
         </div>
+
+        {/* 每日奖励通知 */}
+        {dailyReward.show && (
+          <DailyRewardToast
+            amount={dailyReward.amount}
+            onClose={() => setDailyReward({ show: false, amount: 0 })}
+          />
+        )}
 
         {/* 标题 */}
         <div className="text-center mb-8">

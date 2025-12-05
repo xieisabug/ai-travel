@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuthContext } from '~/hooks/useAuth';
-import { USER_ROLE_NAMES } from '~/types/user';
+import { USER_ROLE_NAMES, type LoginResponse } from '~/types/user';
 
 interface AuthModalProps {
     isOpen: boolean;
-    onClose: () => void;
+    onClose: (loginResponse?: LoginResponse) => void;
     defaultTab?: 'login' | 'register';
 }
 
@@ -46,9 +46,9 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
             return;
         }
 
-        const success = await login(loginForm);
-        if (success) {
-            onClose();
+        const loginResponse = await login(loginForm);
+        if (loginResponse) {
+            onClose(loginResponse); // 传递登录响应给父组件
             // 重置表单
             setLoginForm({ usernameOrEmail: '', password: '' });
         }
@@ -100,12 +100,17 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
         clearError();
     };
 
+    // 关闭弹窗（不带登录响应）
+    const handleClose = () => {
+        onClose();
+    };
+
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
             {/* 背景遮罩 */}
             <div
                 className="absolute inset-0 bg-black/85 backdrop-blur-xl"
-                onClick={onClose}
+                onClick={handleClose}
             />
 
             {/* 模态框 */}
@@ -113,7 +118,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                 {/* 关闭按钮 */}
                 <button
                     className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white/10 border-none rounded-full cursor-pointer transition-all hover:bg-white/15 hover:rotate-90 z-10"
-                    onClick={onClose}
+                    onClick={handleClose}
                 >
                     <svg className="w-4 h-4 text-white/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M18 6L6 18M6 6l12 12" />

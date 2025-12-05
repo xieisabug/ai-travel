@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthModal, UserInfo } from '~/components/AuthModal';
+import { CurrencyDisplay } from '~/components/CurrencyDisplay';
+import { DailyRewardToast } from '~/components/DailyRewardToast';
 import { useAuthContext } from '~/hooks/useAuth';
+import type { LoginResponse } from '~/types/user';
 
 const worlds = [
   { id: 1, name: '云端之城', desc: '漂浮在天际的神秘都市', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', tag: '热门' },
@@ -30,6 +33,25 @@ export default function Home() {
   const [authDefaultTab, setAuthDefaultTab] = useState<'login' | 'register'>('login');
   const [activeWorld, setActiveWorld] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+
+  // 每日奖励通知状态
+  const [dailyReward, setDailyReward] = useState<{ show: boolean; amount: number }>({
+    show: false,
+    amount: 0,
+  });
+
+  // 关闭登录弹窗并处理每日奖励
+  const handleAuthModalClose = (loginResponse?: LoginResponse) => {
+    setIsLoginOpen(false);
+
+    // 如果登录响应包含每日奖励信息，显示通知
+    if (loginResponse?.dailyRewardClaimed && loginResponse?.dailyRewardAmount) {
+      setDailyReward({
+        show: true,
+        amount: loginResponse.dailyRewardAmount,
+      });
+    }
+  };
 
   useEffect(() => {
     setIsVisible(true);
@@ -80,6 +102,7 @@ export default function Home() {
                   <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 transition-all group-hover:w-full" />
                 </button>
               )}
+              <CurrencyDisplay />
               <UserInfo />
             </div>
           ) : (
@@ -450,10 +473,18 @@ export default function Home() {
         </div>
       </footer>
 
+      {/* 每日奖励通知 */}
+      {dailyReward.show && (
+        <DailyRewardToast
+          amount={dailyReward.amount}
+          onClose={() => setDailyReward({ show: false, amount: 0 })}
+        />
+      )}
+
       {/* 登录/注册弹窗 */}
       <AuthModal
         isOpen={isLoginOpen}
-        onClose={() => setIsLoginOpen(false)}
+        onClose={handleAuthModalClose}
         defaultTab={authDefaultTab}
       />
     </div>

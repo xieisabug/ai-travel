@@ -248,6 +248,10 @@ export const authApi = {
     /** 修改密码 */
     changePassword: (data: { oldPassword: string; newPassword: string }) =>
         post(`${API_BASE}/auth/change-password`, data),
+
+    /** 更新用户资料 */
+    updateProfile: (data: { displayName?: string; avatar?: string }) =>
+        put(`${API_BASE}/auth/profile`, data),
 };
 
 /**
@@ -347,4 +351,32 @@ export const adminApi = {
     /** 更新用户状态 */
     updateUserStatus: (id: string, isActive: boolean) =>
         put(`${API_BASE}/admin/users/${id}/status`, { isActive }),
+};
+
+/**
+ * 货币相关 API
+ */
+export const currencyApi = {
+    /** 获取当前余额 */
+    getBalance: () =>
+        get<{ success: boolean; balance: number; error?: string }>(`${API_BASE}/currency/balance`),
+
+    /** 获取交易记录 */
+    getTransactions: (limit = 20, offset = 0) =>
+        get<{
+            success: boolean;
+            transactions: Array<{
+                id: string;
+                userId: string;
+                amount: number;
+                balanceAfter: number;
+                type: string;
+                description: string;
+                referenceId?: string;
+                referenceType?: string;
+                createdAt: string;
+            }>;
+            total: number;
+            error?: string;
+        }>(`${API_BASE}/currency/transactions?limit=${limit}&offset=${offset}`),
 };

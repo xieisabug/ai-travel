@@ -118,6 +118,12 @@ export interface User {
     /** 统计重置日期 (YYYY-MM-DD) */
     statsResetDate: string;
 
+    // === 货币 ===
+    /** 远方币余额 */
+    currencyBalance: number;
+    /** 最后领取每日奖励日期 (YYYY-MM-DD) */
+    lastDailyClaimDate?: string;
+
     // === 元数据 ===
     /** 创建时间 */
     createdAt: string;
@@ -178,6 +184,10 @@ export interface LoginResponse {
     user?: CurrentUser;
     /** 会话 Token */
     token?: string;
+    /** 是否领取了每日奖励 */
+    dailyRewardClaimed?: boolean;
+    /** 领取的每日奖励金额 */
+    dailyRewardAmount?: number;
 }
 
 /**

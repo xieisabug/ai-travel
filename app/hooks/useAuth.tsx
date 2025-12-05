@@ -20,7 +20,7 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-    login: (data: LoginRequest) => Promise<boolean>;
+    login: (data: LoginRequest) => Promise<LoginResponse | null>;
     register: (data: RegisterRequest) => Promise<boolean>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
@@ -80,7 +80,7 @@ export function useAuth(): AuthContextValue {
     }, []);
 
     // 登录
-    const login = useCallback(async (data: LoginRequest): Promise<boolean> => {
+    const login = useCallback(async (data: LoginRequest): Promise<LoginResponse | null> => {
         setState(prev => ({ ...prev, isLoading: true, error: null }));
 
         try {
@@ -93,14 +93,14 @@ export function useAuth(): AuthContextValue {
                     isAuthenticated: true,
                     error: null,
                 });
-                return true;
+                return result; // 返回完整的登录响应，包含每日奖励信息
             } else {
                 setState(prev => ({
                     ...prev,
                     isLoading: false,
                     error: result.error || '登录失败',
                 }));
-                return false;
+                return null;
             }
         } catch (error) {
             console.error('登录失败:', error);
@@ -110,7 +110,7 @@ export function useAuth(): AuthContextValue {
                 isLoading: false,
                 error: errorMessage,
             }));
-            return false;
+            return null;
         }
     }, []);
 

@@ -770,6 +770,7 @@ worldApi.post('/auth/register', async (c) => {
             passwordHash: hashPassword(body.password),
             role: 'free',
             isActive: true,
+            currencyBalance: 0,
             todayWorldGenerationCount: 0,
             statsResetDate: getTodayDateString(),
             createdAt: now,
@@ -846,6 +847,18 @@ worldApi.post('/auth/login', async (c) => {
         user.updatedAt = new Date().toISOString();
         await storage.saveUser(user);
 
+        // 尝试领取每日登录奖励
+        const dailyClaimResult = await storage.claimDailyBonus(user.id);
+        if (dailyClaimResult.claimed) {
+            // 重新获取用户以获得最新余额
+            const updatedUser = await storage.getUser(user.id);
+            if (updatedUser) {
+                user.currencyBalance = updatedUser.currencyBalance;
+                user.lastDailyClaimDate = updatedUser.lastDailyClaimDate;
+            }
+            apiLogger.info(`💰 用户 ${user.username} 领取每日奖励: ${dailyClaimResult.amount} 远方币`);
+        }
+
         // 创建会话
         const userAgent = c.req.header('user-agent');
         const session = createUserSession(user.id, userAgent);
@@ -866,6 +879,8 @@ worldApi.post('/auth/login', async (c) => {
             success: true,
             user: toCurrentUser(user),
             token: session.token,
+            dailyRewardClaimed: dailyClaimResult.claimed,
+            dailyRewardAmount: dailyClaimResult.claimed ? dailyClaimResult.amount : undefined,
         });
     } catch (error) {
         apiLogger.error('用户登录失败', error);
@@ -1239,6 +1254,117 @@ worldApi.post('/upload', async (c) => {
         return c.json({
             success: false,
             error: error instanceof Error ? error.message : '上传图片失败',
+        }, 500);
+    }
+});
+
+// ============================================
+// 货币 API
+// ============================================
+
+/**
+ * 获取当前用户货币余额
+ * GET /api/currency/balance
+ */
+worldApi.get('/currency/balance', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '请先登录' }, 401);
+        }
+
+        const storage = getStorage();
+        const user = await storage.getUser(currentUser.id);
+
+        return c.json({
+            success: true,
+            balance: user?.currencyBalance || 0,
+        });
+    } catch (error) {
+        apiLogger.error('获取余额失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '获取余额失败',
+        }, 500);
+    }
+});
+
+/**
+ * 获取当前用户交易记录
+ * GET /api/currency/transactions
+ */
+worldApi.get('/currency/transactions', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '请先登录' }, 401);
+        }
+
+        const limit = parseInt(c.req.query('limit') || '20');
+        const offset = parseInt(c.req.query('offset') || '0');
+
+        const storage = getStorage();
+        const result = await storage.getCurrencyTransactions(currentUser.id, limit, offset);
+
+        return c.json({
+            success: true,
+            transactions: result.transactions,
+            total: result.total,
+        });
+    } catch (error) {
+        apiLogger.error('获取交易记录失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '获取交易记录失败',
+        }, 500);
+    }
+});
+
+/**
+ * 更新用户资料 (昵称、头像)
+ * PUT /api/auth/profile
+ */
+worldApi.put('/auth/profile', async (c) => {
+    try {
+        const currentUser = await getCurrentUserFromRequest(c);
+        if (!currentUser) {
+            return c.json({ success: false, error: '请先登录' }, 401);
+        }
+
+        const body = await c.req.json<{ displayName?: string; avatar?: string }>();
+        const storage = getStorage();
+        const user = await storage.getUser(currentUser.id);
+
+        if (!user) {
+            return c.json({ success: false, error: '用户不存在' }, 404);
+        }
+
+        // 更新允许修改的字段
+        if (body.displayName !== undefined) {
+            if (body.displayName.trim().length < 2) {
+                return c.json({ success: false, error: '昵称至少需要2个字符' }, 400);
+            }
+            user.displayName = body.displayName.trim();
+        }
+
+        if (body.avatar !== undefined) {
+            user.avatar = body.avatar;
+        }
+
+        user.updatedAt = new Date().toISOString();
+        await storage.saveUser(user);
+
+        apiLogger.info(`✅ 用户 ${user.username} 更新了资料`);
+
+        return c.json({
+            success: true,
+            user: toCurrentUser(user),
+        });
+    } catch (error) {
+        apiLogger.error('更新用户资料失败', error);
+        return c.json({
+            success: false,
+            error: error instanceof Error ? error.message : '更新失败',
         }, 500);
     }
 });
