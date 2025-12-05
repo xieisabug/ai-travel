@@ -9,6 +9,25 @@
 // ============================================
 
 /**
+ * 视觉风格设定
+ * 确保整个世界的图片风格统一
+ */
+export interface WorldVisualStyle {
+    /** 绘画风格 */
+    artStyle: 'watercolor' | 'pixel' | 'anime' | 'realistic' | 'oil-painting' | 'sketch' | 'fantasy-illustration';
+    /** 色调倾向 */
+    colorPalette: 'warm' | 'cool' | 'pastel' | 'vibrant' | 'muted' | 'monochrome' | 'neon';
+    /** 光影风格 */
+    lighting: 'soft' | 'dramatic' | 'flat' | 'cinematic' | 'ethereal' | 'harsh';
+    /** 整体氛围 */
+    mood: 'mysterious' | 'cheerful' | 'melancholic' | 'epic' | 'serene' | 'whimsical' | 'dark';
+    /** 风格关键词（用于图片生成） */
+    styleKeywords: string[];
+    /** 风格描述（自然语言，用于 prompt） */
+    styleDescription: string;
+}
+
+/**
  * 虚拟世界
  * 由 AI 生成的不存在的幻想世界
  */
@@ -27,6 +46,8 @@ export interface World {
     coverImage?: string;
     /** 世界特色标签 */
     tags: string[];
+    /** 视觉风格设定（确保整个世界图片风格统一） */
+    visualStyle?: WorldVisualStyle;
 
     // === 风土人情 ===
     /** 地理特征描述 */

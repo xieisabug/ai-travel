@@ -5,6 +5,7 @@
  * 底层实现留空，由用户自行填充
  */
 
+import type { WorldVisualStyle } from '~/types/world';
 import {
     createAICallRecord,
     completeAICallRecord,
@@ -66,6 +67,71 @@ export interface ImageGenerateResult {
 // ============================================
 
 /**
+ * 构建视觉风格的 prompt 片段
+ */
+function buildVisualStylePrompt(visualStyle?: WorldVisualStyle): string {
+    if (!visualStyle) {
+        return 'Style: epic fantasy art, cinematic lighting, detailed environment.';
+    }
+
+    const artStyleMap: Record<string, string> = {
+        'watercolor': 'watercolor painting style, soft edges, flowing colors',
+        'pixel': '8-bit pixel art style, retro gaming aesthetic',
+        'anime': 'anime/manga art style, cel-shaded, vibrant',
+        'realistic': 'photorealistic, highly detailed, lifelike',
+        'oil-painting': 'oil painting style, rich textures, classical art',
+        'sketch': 'pencil sketch style, hand-drawn, artistic lines',
+        'fantasy-illustration': 'fantasy illustration style, detailed, epic composition',
+    };
+
+    const colorPaletteMap: Record<string, string> = {
+        'warm': 'warm color palette with oranges, reds, and yellows',
+        'cool': 'cool color palette with blues, greens, and purples',
+        'pastel': 'soft pastel colors, gentle and dreamy',
+        'vibrant': 'vibrant and saturated colors, eye-catching',
+        'muted': 'muted and desaturated colors, subtle tones',
+        'monochrome': 'monochromatic color scheme',
+        'neon': 'neon colors, glowing, cyberpunk aesthetic',
+    };
+
+    const lightingMap: Record<string, string> = {
+        'soft': 'soft diffused lighting',
+        'dramatic': 'dramatic lighting with strong shadows',
+        'flat': 'flat lighting, even illumination',
+        'cinematic': 'cinematic lighting, movie-like atmosphere',
+        'ethereal': 'ethereal glowing light, magical atmosphere',
+        'harsh': 'harsh directional lighting',
+    };
+
+    const moodMap: Record<string, string> = {
+        'mysterious': 'mysterious and enigmatic atmosphere',
+        'cheerful': 'cheerful and bright mood',
+        'melancholic': 'melancholic and wistful feeling',
+        'epic': 'epic and grandiose scale',
+        'serene': 'serene and peaceful atmosphere',
+        'whimsical': 'whimsical and playful mood',
+        'dark': 'dark and moody atmosphere',
+    };
+
+    const styleParts = [
+        `Art style: ${artStyleMap[visualStyle.artStyle] || visualStyle.artStyle}`,
+        colorPaletteMap[visualStyle.colorPalette] || visualStyle.colorPalette,
+        lightingMap[visualStyle.lighting] || visualStyle.lighting,
+        moodMap[visualStyle.mood] || visualStyle.mood,
+    ];
+
+    if (visualStyle.styleKeywords?.length > 0) {
+        styleParts.push(`Keywords: ${visualStyle.styleKeywords.join(', ')}`);
+    }
+
+    if (visualStyle.styleDescription) {
+        styleParts.push(visualStyle.styleDescription);
+    }
+
+    return styleParts.join('. ') + '.';
+}
+
+/**
  * 生成世界封面图的提示词
  */
 export function buildWorldCoverPrompt(world: {
@@ -73,10 +139,13 @@ export function buildWorldCoverPrompt(world: {
     description: string;
     geography: string;
     tags: string[];
+    visualStyle?: WorldVisualStyle;
 }): string {
-    return `A stunning fantasy world landscape, ${world.name}, ${world.description}. 
-Geography features: ${world.geography}. 
-Style: epic fantasy art, cinematic lighting, detailed environment.
+    const stylePrompt = buildVisualStylePrompt(world.visualStyle);
+
+    return `A stunning fantasy world landscape, ${world.name}, ${world.description}.
+Geography features: ${world.geography}.
+${stylePrompt}
 Tags: ${world.tags.join(', ')}.
 High quality, 8K resolution.`;
 }
@@ -88,11 +157,13 @@ export function buildSpotImagePrompt(spot: {
     name: string;
     description: string;
     highlights: string[];
-}, worldName: string): string {
+}, worldName: string, visualStyle?: WorldVisualStyle): string {
+    const stylePrompt = buildVisualStylePrompt(visualStyle);
+
     return `A beautiful scenic view of ${spot.name} in the fantasy world of ${worldName}.
 Description: ${spot.description}
 Features: ${spot.highlights.join(', ')}.
-Style: detailed fantasy art, atmospheric, vibrant colors.
+${stylePrompt}
 High quality, panoramic view.`;
 }
 
@@ -104,7 +175,7 @@ export function buildNPCPortraitPrompt(npc: {
     role: string;
     appearance: string;
     personality: string[];
-}, emotion: string = 'neutral'): string {
+}, emotion: string = 'neutral', visualStyle?: WorldVisualStyle): string {
     const emotionMap: Record<string, string> = {
         neutral: 'calm and composed expression',
         happy: 'bright smile and joyful expression',
@@ -114,11 +185,25 @@ export function buildNPCPortraitPrompt(npc: {
         thinking: 'thoughtful and contemplative expression',
     };
 
+    // NPC 立绘默认使用 anime 风格，但可以根据世界视觉风格调整
+    let stylePrompt = 'Style: anime/game character art, detailed, vibrant.';
+    if (visualStyle) {
+        const artStyleForCharacter = visualStyle.artStyle === 'pixel'
+            ? '8-bit pixel art character'
+            : visualStyle.artStyle === 'watercolor'
+            ? 'watercolor character illustration'
+            : visualStyle.artStyle === 'sketch'
+            ? 'pencil sketch character portrait'
+            : 'anime/game character art';
+
+        stylePrompt = `Style: ${artStyleForCharacter}, ${visualStyle.colorPalette} colors, ${visualStyle.mood} mood.`;
+    }
+
     return `A fantasy character portrait of ${npc.name}, a ${npc.role}.
 Appearance: ${npc.appearance}
 Expression: ${emotionMap[emotion] || emotionMap.neutral}
 Personality traits visible: ${npc.personality.join(', ')}.
-Style: anime/game character art, detailed, vibrant.
+${stylePrompt}
 Upper body portrait, facing slightly to the side.
 Clean background, suitable for visual novel.`;
 }
@@ -130,11 +215,13 @@ export function buildProjectCoverPrompt(project: {
     name: string;
     description: string;
     tags: string[];
-}, worldName: string): string {
+}, worldName: string, visualStyle?: WorldVisualStyle): string {
+    const stylePrompt = buildVisualStylePrompt(visualStyle);
+
     return `A captivating travel destination poster for ${project.name} in ${worldName}.
 Description: ${project.description}
 Theme: ${project.tags.join(', ')}.
-Style: travel poster art, inspiring, adventurous mood.
+${stylePrompt}
 High quality illustration.`;
 }
 
@@ -146,11 +233,13 @@ export function buildTravelVehiclePrompt(vehicle: {
     type: string;
     appearance: string;
     abilities: string[];
-}, worldName: string): string {
+}, worldName: string, visualStyle?: WorldVisualStyle): string {
+    const stylePrompt = buildVisualStylePrompt(visualStyle);
+
     return `A magnificent ${vehicle.type} named ${vehicle.name} in the fantasy world of ${worldName}.
 Appearance: ${vehicle.appearance}
 Special abilities: ${vehicle.abilities.join(', ')}.
-Style: detailed fantasy vehicle design, epic scale, cinematic lighting.
+${stylePrompt}
 Show the vehicle in its full glory, suitable for traveling through fantastical landscapes.
 High quality, 8K resolution.`;
 }
@@ -339,9 +428,10 @@ export async function image_generate_spot(
     worldName: string,
     config: ImageGenerateConfig,
     options?: ImageGenerateOptions,
-    context?: { worldId?: string; projectId?: string }
+    context?: { worldId?: string; projectId?: string },
+    visualStyle?: WorldVisualStyle
 ): Promise<ImageGenerateResult> {
-    const prompt = buildSpotImagePrompt(spot, worldName);
+    const prompt = buildSpotImagePrompt(spot, worldName, visualStyle);
     return image_generate(prompt, config, {
         width: 1600,
         height: 900,
@@ -358,9 +448,10 @@ export async function image_generate_npc_portrait(
     emotion: string = 'neutral',
     config: ImageGenerateConfig,
     options?: ImageGenerateOptions,
-    context?: { worldId?: string; spotId?: string }
+    context?: { worldId?: string; spotId?: string },
+    visualStyle?: WorldVisualStyle
 ): Promise<ImageGenerateResult> {
-    const prompt = buildNPCPortraitPrompt(npc, emotion);
+    const prompt = buildNPCPortraitPrompt(npc, emotion, visualStyle);
     return image_generate(prompt, config, {
         width: 512,
         height: 768,
@@ -377,9 +468,10 @@ export async function image_generate_project_cover(
     worldName: string,
     config: ImageGenerateConfig,
     options?: ImageGenerateOptions,
-    context?: { worldId?: string }
+    context?: { worldId?: string },
+    visualStyle?: WorldVisualStyle
 ): Promise<ImageGenerateResult> {
-    const prompt = buildProjectCoverPrompt(project, worldName);
+    const prompt = buildProjectCoverPrompt(project, worldName, visualStyle);
     return image_generate(prompt, config, {
         width: 1200,
         height: 675,
@@ -396,9 +488,10 @@ export async function image_generate_travel_vehicle(
     worldName: string,
     config: ImageGenerateConfig,
     options?: ImageGenerateOptions,
-    context?: { worldId?: string }
+    context?: { worldId?: string },
+    visualStyle?: WorldVisualStyle
 ): Promise<ImageGenerateResult> {
-    const prompt = buildTravelVehiclePrompt(vehicle, worldName);
+    const prompt = buildTravelVehiclePrompt(vehicle, worldName, visualStyle);
     return image_generate(prompt, config, {
         width: 1600,
         height: 900,
