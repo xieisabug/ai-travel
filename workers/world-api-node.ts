@@ -42,6 +42,9 @@ import type {
     UserRole,
 } from '../app/types/user';
 import { ROLE_PERMISSIONS } from '../app/types/user';
+import qiniuPkg from 'qiniu';
+// 兼容 ESM 默认导出
+const qiniu: any = (qiniuPkg as any).default || qiniuPkg;
 
 // 配置 AI 调用记录器
 configureAICallRecorder({
@@ -118,6 +121,98 @@ function getWorldService(): WorldGenerationService {
     };
 
     return new WorldGenerationService(config);
+}
+
+// ============================================
+// 七牛云上传辅助
+// ============================================
+
+type QiniuZoneKey = 'z0' | 'z1' | 'z2' | 'na0' | 'as0';
+
+interface QiniuUploadConfig {
+    accessKey: string;
+    secretKey: string;
+    bucket: string;
+    publicDomain: string;
+    keyPrefix: string;
+    zone?: QiniuZoneKey;
+}
+
+function resolveQiniuZone(zone?: QiniuZoneKey) {
+    if (!zone) return undefined;
+
+    const zoneMap: Record<QiniuZoneKey, unknown> = {
+        z0: qiniu.zone.Zone_z0,
+        z1: qiniu.zone.Zone_z1,
+        z2: qiniu.zone.Zone_z2,
+        na0: qiniu.zone.Zone_na0,
+        as0: qiniu.zone.Zone_as0,
+    };
+
+    return zoneMap[zone];
+}
+
+function getQiniuConfig(): QiniuUploadConfig | null {
+    const accessKey = process.env.QINIU_ACCESS_KEY;
+    const secretKey = process.env.QINIU_SECRET_KEY;
+    const bucket = process.env.QINIU_BUCKET;
+    const publicDomain = process.env.QINIU_PUBLIC_DOMAIN?.replace(/\/$/, '');
+    const keyPrefixEnv = process.env.QINIU_KEY_PREFIX || 'uploads/';
+    const normalizedPrefix = keyPrefixEnv.replace(/^\//, '');
+    const keyPrefix = normalizedPrefix.endsWith('/') ? normalizedPrefix : `${normalizedPrefix}/`;
+    const zone = process.env.QINIU_ZONE as QiniuZoneKey | undefined;
+
+    if (!accessKey || !secretKey || !bucket || !publicDomain) {
+        return null;
+    }
+
+    return {
+        accessKey,
+        secretKey,
+        bucket,
+        publicDomain,
+        keyPrefix,
+        zone,
+    };
+}
+
+async function uploadToQiniu(fileName: string, buffer: Buffer, mimeType: string): Promise<string> {
+    const config = getQiniuConfig();
+
+    if (!config) {
+        throw new Error('七牛云未配置，请设置 QINIU_ACCESS_KEY、QINIU_SECRET_KEY、QINIU_BUCKET、QINIU_PUBLIC_DOMAIN');
+    }
+
+    const mac = new qiniu.auth.digest.Mac(config.accessKey, config.secretKey);
+    const putPolicy = new qiniu.rs.PutPolicy({ scope: config.bucket });
+    const uploadToken = putPolicy.uploadToken(mac);
+
+    const qiniuConfig = new qiniu.conf.Config();
+    qiniuConfig.useHttpsDomain = true;
+    const zone = resolveQiniuZone(config.zone);
+    if (zone) {
+        // @ts-expect-error qiniu 类型定义较旧，运行时可用
+        qiniuConfig.zone = zone;
+    }
+
+    const formUploader = new qiniu.form_up.FormUploader(qiniuConfig);
+    const putExtra = new qiniu.form_up.PutExtra();
+    putExtra.mimeType = mimeType || 'application/octet-stream';
+
+    const key = `${config.keyPrefix}${fileName}`;
+
+    await new Promise<void>((resolve, reject) => {
+        formUploader.put(uploadToken, key, buffer, putExtra, (err, _body, info) => {
+            if (err) return reject(err);
+            if (!info || info.statusCode !== 200) {
+                const errorMessage = (info as any)?.data?.error || '上传失败';
+                return reject(new Error(`七牛云上传失败: ${info?.statusCode || 'unknown'} ${errorMessage}`));
+            }
+            resolve();
+        });
+    });
+
+    return `${config.publicDomain}/${key}`;
 }
 
 // ============================================
@@ -1230,23 +1325,11 @@ worldApi.post('/upload', async (c) => {
         // 生成文件名
         const ext = file.name.split('.').pop() || 'png';
         const fileName = `upload_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-
-        // 保存到 public/uploads 目录
-        const fs = await import('fs');
-        const path = await import('path');
-
-        const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-        if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir, { recursive: true });
-        }
-
-        const filePath = path.join(uploadsDir, fileName);
         const buffer = Buffer.from(await file.arrayBuffer());
-        fs.writeFileSync(filePath, buffer);
 
-        const url = `/uploads/${fileName}`;
+        const url = await uploadToQiniu(fileName, buffer, file.type);
 
-        apiLogger.info(`✅ 管理员 ${currentUser.username} 上传了图片: ${fileName}`);
+        apiLogger.info(`✅ 管理员 ${currentUser.username} 上传了图片到七牛云: ${fileName}`);
 
         return c.json({ success: true, url });
     } catch (error) {

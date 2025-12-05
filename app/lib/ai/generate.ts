@@ -12,6 +12,7 @@ import type {
     Spot,
     SpotNPC,
     GenerateWorldRequest,
+    WorldVisualStyle,
 } from '~/types/world';
 
 import {
@@ -67,35 +68,109 @@ export interface GenerateResult<T> {
 // Prompt 模板
 // ============================================
 
+// ============================================
+// 基础 System Prompt - 定义 AI 角色和安全边界
+// ============================================
+
+const BASE_SYSTEM_PROMPT = `你是一个专业的游戏内容设计师和虚拟导游，专门为全年龄段玩家创造独特有趣的虚拟世界和旅游体验。
+
+【重要规则 - 必须严格遵守】
+1. 内容安全：所有生成的内容必须适合全年龄段玩家（包括儿童），禁止任何暴力、恐怖、色情、政治敏感内容
+2. 保持神秘感：营造奇幻神秘的氛围，但不要引起不适或恐惧感
+3. 逻辑一致性：你生成的所有内容必须与已提供的世界设定保持严格一致，不得自相矛盾
+4. 积极向上：传达探索的乐趣、文化的多样性、友好的交流
+5. 尊重设定：如果已经给出了世界的地理/气候/文化等设定，后续生成内容必须与之匹配
+
+请始终返回有效的 JSON 格式。`;
+
+/**
+ * 构建包含世界设定的增强 System Prompt
+ * 将所有世界设定信息注入 system prompt，确保 AI 不会自相矛盾
+ */
+function buildEnhancedSystemPrompt(world?: World): string {
+    if (!world) {
+        return BASE_SYSTEM_PROMPT;
+    }
+
+    return `${BASE_SYSTEM_PROMPT}
+
+【当前世界设定 - 所有生成内容必须与以下设定保持一致】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+世界名称：${world.name}
+${world.subtitle ? `世界别称：${world.subtitle}` : ''}
+简介：${world.description}
+详细描述：${world.detailedDescription}
+
+【地理与气候】
+地理特征：${world.geography}
+气候特点：${world.climate}
+${world.bestTimeToVisit ? `最佳旅游时间：${world.bestTimeToVisit}` : ''}
+
+【文化与居民】
+文化特色：${world.culture}
+当地居民：${world.inhabitants}
+语言/交流：${world.language}
+货币/交易：${world.currency}
+特色美食：${world.cuisine}
+${world.rules ? `特殊规则/禁忌：${world.rules}` : ''}
+
+【世界标签】${world.tags.join('、')}
+
+${world.visualStyle ? `【视觉风格设定】
+绘画风格：${world.visualStyle.artStyle}
+色调：${world.visualStyle.colorPalette}
+光影：${world.visualStyle.lighting}
+氛围：${world.visualStyle.mood}
+风格描述：${world.visualStyle.styleDescription}` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【一致性检查提醒】
+- 如果世界是"极寒之地"，就不能出现"岩浆"、"酷热"等矛盾元素
+- 如果世界居民是"和平的精灵"，就不能出现好战的描述
+- 所有景点、NPC、对话都必须符合上述世界观设定`;
+}
+
 const PROMPTS = {
     // 世界生成 prompt
-    generateWorld: (theme?: string) => `你是一个专业的奇幻世界设计师。请创造一个独特的、不存在于现实中的虚拟世界。
+    generateWorld: (theme?: string) => `请创造一个独特的、不存在于现实中的虚拟幻想世界。
 
 ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一个独特的幻想世界。'}
 
 请生成一个完整的世界描述，包含以下内容：
-1. 世界名称和副标题
-2. 简短描述（50字以内）
-3. 详细描述（200字左右）
-4. 地理特征
-5. 气候特点
-6. 文化特色
-7. 当地居民特点
-8. 特色美食
-9. 语言/交流方式
-10. 货币/交易方式
-11. 特殊规则或禁忌
-12. 最佳旅游时间
-13. 3-5个特色标签
 
-请以 JSON 格式返回，格式如下：
+【基础信息】
+1. 世界名称（富有想象力的名字）
+2. 副标题/别称
+3. 简短描述（50字以内，概括世界特色）
+4. 详细描述（200字左右，描绘世界的整体面貌）
+
+【地理与气候】（非常重要！后续所有内容都必须与此一致）
+5. 地理特征（详细描述地形、环境特点）
+6. 气候特点（详细描述天气、温度、季节特点）
+
+【文化与居民】
+7. 文化特色
+8. 当地居民特点
+9. 特色美食
+10. 语言/交流方式
+11. 货币/交易方式
+12. 特殊规则或禁忌
+13. 最佳旅游时间
+
+【标签与风格】
+14. 3-5个特色标签
+
+【视觉风格设定】（非常重要！确保整个世界的图片风格统一）
+15. 选择一个统一的绘画风格，并详细描述
+
+请以 JSON 格式返回：
 {
     "name": "世界名称",
     "subtitle": "副标题",
     "description": "简短描述",
     "detailedDescription": "详细描述",
-    "geography": "地理特征",
-    "climate": "气候特点",
+    "geography": "地理特征（详细描述）",
+    "climate": "气候特点（详细描述）",
     "culture": "文化特色",
     "inhabitants": "居民特点",
     "cuisine": "特色美食",
@@ -103,22 +178,28 @@ ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一�
     "currency": "货币描述",
     "rules": "特殊规则",
     "bestTimeToVisit": "最佳旅游时间",
-    "tags": ["标签1", "标签2", "标签3"]
+    "tags": ["标签1", "标签2", "标签3"],
+    "visualStyle": {
+        "artStyle": "watercolor|pixel|anime|realistic|oil-painting|sketch|fantasy-illustration 之一",
+        "colorPalette": "warm|cool|pastel|vibrant|muted|monochrome|neon 之一",
+        "lighting": "soft|dramatic|flat|cinematic|ethereal|harsh 之一",
+        "mood": "mysterious|cheerful|melancholic|epic|serene|whimsical|dark 之一",
+        "styleKeywords": ["风格关键词1", "风格关键词2", "风格关键词3"],
+        "styleDescription": "用一段话详细描述这个世界应该呈现的视觉风格，包括色彩、笔触、氛围等，供图片生成使用"
+    }
 }`,
 
     // 旅游项目生成 prompt
-    generateTravelProjects: (world: World, count: number = 3) => `基于以下虚拟世界，请设计 ${count} 个独特的旅游项目：
+    generateTravelProjects: (world: World, count: number = 3) => `请为当前世界设计 ${count} 个独特的旅游项目。
 
-世界信息：
-- 名称：${world.name}
-- 描述：${world.detailedDescription}
-- 地理：${world.geography}
-- 文化：${world.culture}
-- 特色：${world.tags.join('、')}
+【重要提醒】
+- 所有旅游项目必须与世界的地理（${world.geography.slice(0, 50)}...）和气候（${world.climate.slice(0, 50)}...）相符
+- 项目内容必须体现世界的文化特色（${world.culture.slice(0, 50)}...）
+- 确保项目之间有差异化，覆盖不同的体验类型
 
 每个旅游项目应包含：
-1. 项目名称
-2. 项目描述（100字左右）
+1. 项目名称（与世界风格契合）
+2. 项目描述（100字左右，突出特色体验）
 3. 推荐游玩天数
 4. 难度等级（1-5）
 5. 特色标签（3-5个）
@@ -137,23 +218,25 @@ ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一�
 ]`,
 
     // 景点生成 prompt
-    generateSpots: (project: TravelProject, world: World, count: number = 5) => `基于以下旅游项目，请设计 ${count} 个独特的景点：
+    generateSpots: (project: TravelProject, world: World, count: number = 5) => `请为以下旅游项目设计 ${count} 个独特的景点：
 
-世界背景：
-- 名称：${world.name}
-- 文化：${world.culture}
-- 地理：${world.geography}
+旅游项目信息：
+- 项目名称：${project.name}
+- 项目描述：${project.description}
+- 项目标签：${project.tags.join('、')}
 
-旅游项目：
-- 名称：${project.name}
-- 描述：${project.description}
-- 标签：${project.tags.join('、')}
+【重要提醒 - 一致性要求】
+- 所有景点必须符合世界的地理特征
+- 所有景点必须符合世界的气候特点
+- 景点描述必须体现世界的文化特色
+- 例如：如果是冰雪世界，景点应该有冰川、雪山、极光等元素，而不是沙漠、火山
+- 例如：如果是海底世界，景点应该有珊瑚、海藻、水下建筑等，而不是陆地森林
 
 每个景点应包含：
-1. 景点名称
+1. 景点名称（富有想象力，与世界风格契合）
 2. 简短描述（50字以内）
-3. 详细描述（150字左右）
-4. 历史/传说故事（200字左右）
+3. 详细描述（150字左右，细节要与世界设定一致）
+4. 历史/传说故事（200字左右，与世界文化背景相符）
 5. 3-5个亮点
 6. 参观建议
 7. 建议游览时长（分钟）
@@ -172,27 +255,28 @@ ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一�
 ]`,
 
     // NPC 生成 prompt
-    generateNPC: (spot: Spot, world: World) => `为以下景点创建一个独特的 NPC 角色：
-
-世界背景：
-- 名称：${world.name}
-- 文化：${world.culture}
-- 居民特点：${world.inhabitants}
-- 语言风格：${world.language}
+    generateNPC: (spot: Spot, world: World) => `请为以下景点创建一个独特的 NPC 角色：
 
 景点信息：
-- 名称：${spot.name}
-- 描述：${spot.description}
-- 故事：${spot.story}
+- 景点名称：${spot.name}
+- 景点描述：${spot.description}
+- 景点故事：${spot.story}
+
+【重要提醒 - 角色设定要求】
+- NPC 必须符合世界的居民特点：${world.inhabitants}
+- NPC 的说话风格必须符合世界的语言特色：${world.language}
+- NPC 的性格和外貌必须与世界文化相符
+- NPC 必须是友善、有趣、适合全年龄段的角色
+- 角色应该能够为游客提供有价值的信息和互动体验
 
 请创建一个符合这个景点和世界观的 NPC，包含：
-1. 名称
+1. 名称（符合世界文化的名字）
 2. 角色定位（如：导游、店主、守护者、居民等）
 3. 简短描述
-4. 背景故事（150字左右）
-5. 性格特点（3-5个词语）
-6. 外貌描述（用于生成立绘）
-7. 说话风格
+4. 背景故事（150字左右，与景点故事有关联）
+5. 性格特点（3-5个积极正面的词语）
+6. 外貌描述（详细描述外貌特征，用于生成立绘，必须与世界居民特点相符）
+7. 说话风格（必须与世界语言特色相符）
 8. 兴趣爱好
 
 请以 JSON 格式返回：
@@ -202,7 +286,7 @@ ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一�
     "description": "简短描述",
     "backstory": "背景故事",
     "personality": ["性格1", "性格2", "性格3"],
-    "appearance": "外貌描述",
+    "appearance": "详细外貌描述",
     "speakingStyle": "说话风格",
     "interests": ["兴趣1", "兴趣2"]
 }`,
@@ -217,42 +301,40 @@ NPC 信息：
 - 说话风格：${npc.speakingStyle}
 - 背景：${npc.backstory}
 
-世界观：${world.name} - ${world.culture}
-
 对话场景：${context}
 
-请生成 NPC 的对话内容，注意：
-1. 符合 NPC 的性格和说话风格
-2. 体现世界观的特色
-3. 语言生动有趣
+【重要提醒 - 对话生成要求】
+- 对话内容必须符合 NPC 的性格和说话风格
+- 对话必须体现世界的文化特色（${world.culture.slice(0, 50)}...）
+- 对话必须使用世界的语言风格（${world.language.slice(0, 50)}...）
+- 内容必须积极向上、友善有趣，适合全年龄段
+- 可以透露一些关于世界的有趣信息，增加神秘感
+- 不要出现任何与世界设定矛盾的内容
+
+请生成 NPC 的对话内容：
 
 请以 JSON 格式返回：
 {
-    "greeting": "初次见面的招呼语",
-    "mainDialog": ["对话1", "对话2", "对话3"],
-    "farewell": "告别语"
+    "greeting": "初次见面的招呼语（要有角色特色）",
+    "mainDialog": ["对话1", "对话2", "对话3（3-5段有趣的对话内容）"],
+    "farewell": "告别语（温馨友好的道别）"
 }`,
 
     // 旅行器生成 prompt
-    generateTravelVehicle: (world: World) => `为以下虚拟世界设计一个独特的旅行器（交通工具）：
+    generateTravelVehicle: (world: World) => `请为当前世界设计一个独特的旅行器（交通工具）。
 
-世界信息：
-- 名称：${world.name}
-- 描述：${world.detailedDescription}
-- 地理：${world.geography}
-- 气候：${world.climate}
-- 文化：${world.culture}
-- 特色：${world.tags.join('、')}
+【重要提醒 - 设计要求】
+- 旅行器必须与世界的地理环境相匹配（能在 ${world.geography.slice(0, 30)}... 中有效移动）
+- 旅行器必须适应世界的气候特点（${world.climate.slice(0, 30)}...）
+- 旅行器的风格必须与世界文化相符
+- 可以是任何有创意的形式：魔法飞艇、机械列车、生物坐骑、能量体、传送门系统等
+- 设计要充满想象力但符合世界观逻辑
 
-请设计一个符合这个世界观的独特旅行器，它应该：
-1. 与世界的风格和文化背景相匹配
-2. 具有独特的外观和功能
-3. 能够在这个世界的地理环境中有效移动
-4. 可以是任何形式：魔法飞艇、机械列车、生物坐骑、传送门系统等
+请设计一个符合这个世界观的独特旅行器：
 
 请以 JSON 格式返回：
 {
-    "name": "旅行器名称",
+    "name": "旅行器名称（富有想象力）",
     "type": "类型（如：飞艇、列车、巨龙等）",
     "description": "简短描述（50字以内）",
     "detailedDescription": "详细描述（150字左右）",
@@ -260,7 +342,7 @@ NPC 信息：
     "speed": "速度描述",
     "abilities": ["特殊能力1", "特殊能力2", "特殊能力3"],
     "comfortLevel": 4,
-    "appearance": "详细的外观描述（用于生成图片，200字左右）",
+    "appearance": "详细的外观描述（用于生成图片，200字左右，要与世界视觉风格一致）",
     "interiorDescription": "内部设施描述（100字左右）"
 }`,
 };
@@ -294,6 +376,13 @@ const aiLogger = {
 
 /**
  * 调用 OpenAI API 生成内容
+ * @param prompt 用户 prompt
+ * @param config AI 配置
+ * @param options 生成选项
+ * @param logLabel 日志标签
+ * @param callType AI 调用类型
+ * @param callContext 调用上下文
+ * @param systemPrompt 自定义 system prompt（可选，默认使用基础 prompt）
  */
 async function callOpenAI<T>(
     prompt: string,
@@ -301,7 +390,8 @@ async function callOpenAI<T>(
     options: GenerateOptions = {},
     logLabel: string = 'AI调用',
     callType: AICallType = 'generate_text',
-    callContext: AICallContext = {}
+    callContext: AICallContext = {},
+    systemPrompt: string = BASE_SYSTEM_PROMPT
 ): Promise<GenerateResult<T>> {
     const {
         apiKey = '',
@@ -356,7 +446,7 @@ async function callOpenAI<T>(
                     messages: [
                         {
                             role: 'system',
-                            content: '你是一个专业的游戏内容设计师，擅长创造独特有趣的虚拟世界和旅游体验。请始终返回有效的 JSON 格式。',
+                            content: systemPrompt,
                         },
                         {
                             role: 'user',
@@ -477,9 +567,11 @@ export async function ai_generate_travel_projects(
     options?: GenerateOptions
 ): Promise<GenerateResult<Array<Omit<TravelProject, 'id' | 'worldId' | 'spots' | 'tourRoute' | 'generationStatus' | 'selectedCount' | 'createdAt'>>>> {
     const prompt = PROMPTS.generateTravelProjects(world, count);
+    // 使用包含世界设定的增强 system prompt
+    const enhancedSystemPrompt = buildEnhancedSystemPrompt(world);
 
     const result = await callOpenAI<{ projects?: unknown[] } | unknown[]>(
-        prompt, config, options, '生成旅游项目', 'generate_projects', { worldId: world.id }
+        prompt, config, options, '生成旅游项目', 'generate_projects', { worldId: world.id }, enhancedSystemPrompt
     );
 
     if (result.success && result.data) {
@@ -505,9 +597,11 @@ export async function ai_generate_spots(
     options?: GenerateOptions
 ): Promise<GenerateResult<Array<Omit<Spot, 'id' | 'projectId' | 'npcs' | 'hotspots' | 'orderInRoute' | 'generationStatus'>>>> {
     const prompt = PROMPTS.generateSpots(project, world, count);
+    // 使用包含世界设定的增强 system prompt
+    const enhancedSystemPrompt = buildEnhancedSystemPrompt(world);
 
     const result = await callOpenAI<{ spots?: unknown[] } | unknown[]>(
-        prompt, config, options, '生成景点', 'generate_spots', { worldId: world.id, projectId: project.id }
+        prompt, config, options, '生成景点', 'generate_spots', { worldId: world.id, projectId: project.id }, enhancedSystemPrompt
     );
 
     if (result.success && result.data) {
@@ -531,7 +625,9 @@ export async function ai_generate_npc(
     options?: GenerateOptions
 ): Promise<GenerateResult<Omit<SpotNPC, 'id' | 'sprite' | 'sprites' | 'greetingDialogId' | 'dialogOptions' | 'generationStatus'>>> {
     const prompt = PROMPTS.generateNPC(spot, world);
-    return callOpenAI(prompt, config, options, `生成NPC-${spot.name}`, 'generate_npc', { worldId: world.id, spotId: spot.id });
+    // 使用包含世界设定的增强 system prompt
+    const enhancedSystemPrompt = buildEnhancedSystemPrompt(world);
+    return callOpenAI(prompt, config, options, `生成NPC-${spot.name}`, 'generate_npc', { worldId: world.id, spotId: spot.id }, enhancedSystemPrompt);
 }
 
 /**
@@ -549,7 +645,9 @@ export async function ai_generate_dialog(
     farewell: string;
 }>> {
     const prompt = PROMPTS.generateDialog(npc, context, world);
-    return callOpenAI(prompt, config, options, `生成对话-${npc.name}`, 'generate_dialog', { worldId: world.id, npcId: npc.id });
+    // 使用包含世界设定的增强 system prompt
+    const enhancedSystemPrompt = buildEnhancedSystemPrompt(world);
+    return callOpenAI(prompt, config, options, `生成对话-${npc.name}`, 'generate_dialog', { worldId: world.id, npcId: npc.id }, enhancedSystemPrompt);
 }
 
 /**
@@ -583,7 +681,9 @@ export async function ai_generate_travel_vehicle(
     options?: GenerateOptions
 ): Promise<GenerateResult<Omit<TravelVehicle, 'id' | 'image' | 'createdAt' | 'generationStatus'>>> {
     const prompt = PROMPTS.generateTravelVehicle(world);
-    return callOpenAI(prompt, config, options, '生成旅行器', 'generate_vehicle', { worldId: world.id });
+    // 使用包含世界设定的增强 system prompt
+    const enhancedSystemPrompt = buildEnhancedSystemPrompt(world);
+    return callOpenAI(prompt, config, options, '生成旅行器', 'generate_vehicle', { worldId: world.id }, enhancedSystemPrompt);
 }
 
 // ============================================

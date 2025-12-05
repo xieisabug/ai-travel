@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '~/hooks/useAuth';
 import type { World, TravelVehicle, TravelProject, Spot, SpotNPC } from '~/types/world';
+import {
+    buildNPCPortraitPrompt,
+    buildProjectCoverPrompt,
+    buildSpotImagePrompt,
+    buildTravelVehiclePrompt,
+    buildWorldCoverPrompt,
+} from '~/lib/ai';
 
 // ============================================
 // 类型定义
@@ -587,12 +594,24 @@ function WorldEditor({
                             <ImageUpload
                                 value={world.coverImage}
                                 onChange={(url) => onUpdateWorld('coverImage', url)}
+                                prompt={buildWorldCoverPrompt({
+                                    name: world.name,
+                                    description: world.description,
+                                    geography: world.geography,
+                                    tags: world.tags || [],
+                                })}
                             />
                         </FormField>
                         <FormField label="主图">
                             <ImageUpload
                                 value={world.imageUrl}
                                 onChange={(url) => onUpdateWorld('imageUrl', url)}
+                                prompt={buildWorldCoverPrompt({
+                                    name: world.name,
+                                    description: world.description,
+                                    geography: world.geography,
+                                    tags: world.tags || [],
+                                })}
                             />
                         </FormField>
                         <FormField label="标签">
@@ -741,6 +760,12 @@ function WorldEditor({
                             <ImageUpload
                                 value={world.travelVehicle.image}
                                 onChange={(url) => onUpdateVehicle('image', url)}
+                                prompt={buildTravelVehiclePrompt({
+                                    name: world.travelVehicle.name,
+                                    type: world.travelVehicle.type,
+                                    appearance: world.travelVehicle.appearance,
+                                    abilities: world.travelVehicle.abilities || [],
+                                }, world.name)}
                             />
                         </FormField>
                         <div className="grid grid-cols-2 gap-4">
@@ -882,6 +907,11 @@ function WorldEditor({
                                             <ImageUpload
                                                 value={project.coverImage}
                                                 onChange={(url) => onUpdateProject(project.id, 'coverImage', url)}
+                                                prompt={buildProjectCoverPrompt({
+                                                    name: project.name,
+                                                    description: project.description,
+                                                    tags: project.tags || [],
+                                                }, world.name)}
                                             />
                                         </FormField>
                                         <div className="grid grid-cols-3 gap-4">
@@ -949,6 +979,7 @@ function WorldEditor({
                                                             <div className="p-4 space-y-4 border-t border-white/10">
                                                                 <SpotEditor
                                                                     spot={spot}
+                                                                    worldName={world.name}
                                                                     onUpdate={(field, value) => onUpdateSpot(project.id, spot.id, field, value)}
                                                                     onUpdateNpc={(npcId, field, value) => onUpdateNpc(project.id, spot.id, npcId, field, value)}
                                                                 />
@@ -975,11 +1006,12 @@ function WorldEditor({
 
 interface SpotEditorProps {
     spot: Spot;
+    worldName: string;
     onUpdate: (field: keyof Spot, value: any) => void;
     onUpdateNpc: (npcId: string, field: keyof SpotNPC, value: any) => void;
 }
 
-function SpotEditor({ spot, onUpdate, onUpdateNpc }: SpotEditorProps) {
+function SpotEditor({ spot, worldName, onUpdate, onUpdateNpc }: SpotEditorProps) {
     const [expandedNpcs, setExpandedNpcs] = useState<Set<string>>(new Set());
 
     const toggleNpc = (npcId: string) => {
@@ -1024,6 +1056,11 @@ function SpotEditor({ spot, onUpdate, onUpdateNpc }: SpotEditorProps) {
                 <ImageUpload
                     value={spot.image}
                     onChange={(url) => onUpdate('image', url)}
+                    prompt={buildSpotImagePrompt({
+                        name: spot.name,
+                        description: spot.description,
+                        highlights: spot.highlights || [],
+                    }, worldName)}
                 />
             </FormField>
             <FormField label="历史/传说">
@@ -1100,6 +1137,8 @@ function SpotEditor({ spot, onUpdate, onUpdateNpc }: SpotEditorProps) {
                                     <div className="p-3 space-y-3 border-t border-white/10">
                                         <NpcEditor
                                             npc={npc}
+                                                                worldName={worldName}
+                                                                spotName={spot.name}
                                             onUpdate={(field, value) => onUpdateNpc(npc.id, field, value)}
                                         />
                                     </div>
@@ -1119,10 +1158,12 @@ function SpotEditor({ spot, onUpdate, onUpdateNpc }: SpotEditorProps) {
 
 interface NpcEditorProps {
     npc: SpotNPC;
+    worldName: string;
+    spotName: string;
     onUpdate: (field: keyof SpotNPC, value: any) => void;
 }
 
-function NpcEditor({ npc, onUpdate }: NpcEditorProps) {
+function NpcEditor({ npc, worldName, spotName, onUpdate }: NpcEditorProps) {
     return (
         <>
             <div className="grid grid-cols-2 gap-3">
@@ -1185,6 +1226,12 @@ function NpcEditor({ npc, onUpdate }: NpcEditorProps) {
                 <ImageUpload
                     value={npc.sprite}
                     onChange={(url) => onUpdate('sprite', url)}
+                    prompt={buildNPCPortraitPrompt({
+                        name: npc.name,
+                        role: npc.role,
+                        appearance: npc.appearance,
+                        personality: npc.personality || [],
+                    }) + `\nWorld: ${worldName}\nSpot: ${spotName}`}
                 />
             </FormField>
             <FormField label="生成状态" small>
@@ -1242,17 +1289,37 @@ function FormField({
 function ImageUpload({
     value,
     onChange,
+    prompt,
 }: {
     value?: string;
     onChange: (url: string) => void;
+    prompt?: string;
 }) {
     const [isUploading, setIsUploading] = useState(false);
+    const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+    const [uploadError, setUploadError] = useState<string | null>(null);
+
+    const promptText = prompt?.trim();
+
+    const handleCopyPrompt = async () => {
+        if (!promptText) return;
+        try {
+            await navigator.clipboard.writeText(promptText);
+            setCopyStatus('copied');
+            setTimeout(() => setCopyStatus('idle'), 2000);
+        } catch (err) {
+            console.error('复制 prompt 失败:', err);
+            setCopyStatus('error');
+            setTimeout(() => setCopyStatus('idle'), 2000);
+        }
+    };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         setIsUploading(true);
+        setUploadError(null);
         try {
             const formData = new FormData();
             formData.append('file', file);
@@ -1262,11 +1329,15 @@ function ImageUpload({
                 body: formData,
             });
             const data = await response.json();
-            if (data.success && data.url) {
+            if (!response.ok || !data.success || !data.url) {
+                const message = data?.error || `上传失败（${response.status}）`;
+                setUploadError(message);
+            } else {
                 onChange(data.url);
             }
         } catch (err) {
             console.error('上传失败:', err);
+            setUploadError(err instanceof Error ? err.message : '上传失败，请稍后重试');
         } finally {
             setIsUploading(false);
         }
@@ -1274,6 +1345,36 @@ function ImageUpload({
 
     return (
         <div className="space-y-2">
+            {promptText && (
+                <div className="flex items-start gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-xs text-white/70">
+                    <div className="shrink-0 pt-0.5" title="图片生成提示词">💡</div>
+                    <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                            <span className="font-medium text-white">提示词</span>
+                            <button
+                                type="button"
+                                onClick={handleCopyPrompt}
+                                className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/15 text-[11px] transition-colors"
+                                disabled={copyStatus === 'copied'}
+                            >
+                                {copyStatus === 'copied' ? '已复制' : '复制'}
+                            </button>
+                        </div>
+                        <p
+                            className="leading-relaxed text-white/70 break-words"
+                            title={promptText}
+                            style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {promptText}
+                        </p>
+                    </div>
+                </div>
+            )}
             <div className="flex gap-2">
                 <input
                     type="text"
@@ -1293,6 +1394,11 @@ function ImageUpload({
                     />
                 </label>
             </div>
+            {uploadError && (
+                <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                    {uploadError}
+                </div>
+            )}
             {value && (
                 <div className="relative w-32 h-20 bg-white/5 rounded-lg overflow-hidden">
                     <img src={value} alt="" className="w-full h-full object-cover" />
