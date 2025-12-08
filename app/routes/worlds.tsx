@@ -279,7 +279,6 @@ export default function WorldsPage() {
               {currentWorld.subtitle && (
                 <p className="text-white/80 text-lg mb-2">{currentWorld.subtitle}</p>
               )}
-              <p className="text-white/60 max-w-2xl mx-auto">{currentWorld.description}</p>
             </div>
             {currentWorld.imageUrl && (
               <img
@@ -300,109 +299,126 @@ export default function WorldsPage() {
               </div>
             )}
 
-            {/* 世界信息卡片 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                <h3 className="text-indigo-400 font-semibold mb-4 flex items-center gap-2">
-                  🌍 世界概况
-                </h3>
-                <div className="space-y-3 text-sm">
-                  <div><span className="text-white/50">地理：</span><span className="text-white/80">{currentWorld.geography}</span></div>
-                  <div><span className="text-white/50">气候：</span><span className="text-white/80">{currentWorld.climate}</span></div>
-                  <div><span className="text-white/50">文化：</span><span className="text-white/80">{currentWorld.culture}</span></div>
-                  <div><span className="text-white/50">居民：</span><span className="text-white/80">{currentWorld.inhabitants}</span></div>
-                </div>
+            {/* 世界概况 */}
+            <section className="relative rounded-[2rem] overflow-hidden bg-[linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))] border border-white/[0.08] shadow-[0_40px_100px_rgba(0,0,0,0.45)]">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_-20%,rgba(99,102,241,0.12),transparent_60%)] pointer-events-none" />
+              <div className="relative z-10 px-8 pt-10 pb-8">
+                <p className="text-[11px] font-medium tracking-[0.25em] uppercase text-indigo-400/80 mb-2">世界概况</p>
+                <h3 className="text-3xl md:text-4xl font-bold text-white mb-3">地貌 · 气候 · 地标</h3>
               </div>
-
-              <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                <h3 className="text-indigo-400 font-semibold mb-4 flex items-center gap-2">
-                  🍽️ 特色文化
-                </h3>
-                <div className="space-y-3 text-sm">
-                  <div><span className="text-white/50">美食：</span><span className="text-white/80">{currentWorld.cuisine}</span></div>
-                  <div><span className="text-white/50">语言：</span><span className="text-white/80">{currentWorld.language}</span></div>
-                  <div><span className="text-white/50">货币：</span><span className="text-white/80">{currentWorld.currency}</span></div>
-                  {currentWorld.rules && (
-                    <div><span className="text-white/50">规则：</span><span className="text-white/80">{currentWorld.rules}</span></div>
-                  )}
-                </div>
+              <div className="relative z-10 flex gap-5 px-8 pb-10 overflow-x-auto snap-x snap-mandatory scrollbar-hide">
+                {(currentWorld.overviewImages && currentWorld.overviewImages.length > 0
+                  ? currentWorld.overviewImages
+                  : currentWorld.imageUrl
+                    ? [currentWorld.imageUrl]
+                    : []).map((url, idx) => (
+                  <div
+                    key={`${url}-${idx}`}
+                    className="group relative flex-shrink-0 w-[75vw] max-w-[480px] aspect-[16/10] rounded-2xl overflow-hidden snap-center ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.02]"
+                  >
+                    <img src={url} alt={`${currentWorld.name} 概况 ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                  </div>
+                ))}
+                {(!currentWorld.overviewImages || currentWorld.overviewImages.length === 0) && !currentWorld.imageUrl && (
+                  <div className="flex-shrink-0 w-[75vw] max-w-[480px] aspect-[16/10] flex items-center justify-center rounded-2xl border border-dashed border-white/10 text-white/40 text-sm">
+                    暂无概况图片
+                  </div>
+                )}
               </div>
-            </div>
+            </section>
 
-            {/* 旅行器信息 */}
+            {/* 特色文化 */}
+            <section className="relative rounded-[2rem] overflow-hidden bg-[linear-gradient(135deg,rgba(139,92,246,0.06),rgba(99,102,241,0.04),rgba(255,255,255,0.01))] border border-white/[0.08] shadow-[0_40px_100px_rgba(0,0,0,0.45)]">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_-10%,rgba(168,85,247,0.15),transparent_55%)] pointer-events-none" />
+              <div className="relative z-10 px-8 pt-10 pb-8">
+                <p className="text-[11px] font-medium tracking-[0.25em] uppercase text-purple-400/80 mb-2">特色文化</p>
+                <h3 className="text-3xl md:text-4xl font-bold text-white mb-3">人文 · 美食 · 交流</h3>
+              </div>
+              <div className="relative z-10 flex gap-5 px-8 pb-10 overflow-x-auto snap-x snap-mandatory scrollbar-hide">
+                {(currentWorld.cultureImages && currentWorld.cultureImages.length > 0
+                  ? currentWorld.cultureImages
+                  : currentWorld.imageUrl
+                    ? [currentWorld.imageUrl]
+                    : []).map((url, idx) => (
+                  <div
+                    key={`${url}-${idx}`}
+                    className="group relative flex-shrink-0 w-[75vw] max-w-[480px] aspect-[16/10] rounded-2xl overflow-hidden snap-center ring-1 ring-white/10 transition-transform duration-300 hover:scale-[1.02]"
+                  >
+                    <img src={url} alt={`${currentWorld.name} 文化 ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                  </div>
+                ))}
+                {(!currentWorld.cultureImages || currentWorld.cultureImages.length === 0) && !currentWorld.imageUrl && (
+                  <div className="flex-shrink-0 w-[75vw] max-w-[480px] aspect-[16/10] flex items-center justify-center rounded-2xl border border-dashed border-white/10 text-white/40 text-sm">
+                    暂无文化图片
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* 旅行器 */}
             {currentWorld.travelVehicle && (
-              <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-2xl p-6 border border-indigo-500/20">
-                <h3 className="text-indigo-400 font-semibold mb-4 flex items-center gap-2">
-                  🚀 旅行器：{currentWorld.travelVehicle.name}
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <p className="text-white/80 mb-3">{currentWorld.travelVehicle.description}</p>
-                    <p className="text-white/60 text-sm mb-4">{currentWorld.travelVehicle.detailedDescription}</p>
-                    <div className="space-y-2 text-sm">
-                      <div><span className="text-white/50">类型：</span><span className="text-white/80">{currentWorld.travelVehicle.type}</span></div>
-                      <div><span className="text-white/50">载客量：</span><span className="text-white/80">{currentWorld.travelVehicle.capacity} 人</span></div>
-                      <div><span className="text-white/50">速度：</span><span className="text-white/80">{currentWorld.travelVehicle.speed}</span></div>
-                      <div><span className="text-white/50">舒适度：</span><span className="text-white/80">{'⭐'.repeat(currentWorld.travelVehicle.comfortLevel)}</span></div>
-                    </div>
-                    {currentWorld.travelVehicle.abilities.length > 0 && (
-                      <div className="mt-4">
-                        <span className="text-white/50 text-sm">特殊能力：</span>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {currentWorld.travelVehicle.abilities.map((ability, i) => (
-                            <span key={i} className="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs">
-                              {ability}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+              <section className="relative rounded-[2rem] overflow-hidden bg-[linear-gradient(160deg,rgba(99,102,241,0.08),rgba(139,92,246,0.06),rgba(0,0,0,0))] border border-indigo-500/15 shadow-[0_40px_100px_rgba(99,102,241,0.12)]">
+                <div className="absolute -top-24 -right-24 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 p-8 md:p-10">
+                  <div className="flex flex-col justify-center space-y-4">
+                    <p className="text-[11px] font-medium tracking-[0.25em] uppercase text-indigo-400/80">旅行器</p>
+                    <h3 className="text-3xl md:text-4xl font-bold text-white leading-tight">{currentWorld.travelVehicle.name}</h3>
+                    <p className="text-white/70 text-base md:text-lg leading-relaxed">{currentWorld.travelVehicle.description}</p>
+                    <p className="text-white/50 text-sm">类型：{currentWorld.travelVehicle.type}</p>
                   </div>
                   {currentWorld.travelVehicle.image && (
                     <div className="flex items-center justify-center">
                       <img
                         src={currentWorld.travelVehicle.image}
                         alt={currentWorld.travelVehicle.name}
-                        className="max-w-full max-h-48 object-contain rounded-xl"
+                        className="w-full max-h-80 object-contain drop-shadow-[0_30px_60px_rgba(0,0,0,0.5)] transition-transform duration-500 hover:scale-105"
                       />
                     </div>
                   )}
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* 旅游项目概览 */}
-            <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-              <h3 className="text-indigo-400 font-semibold mb-4 flex items-center gap-2">
-                🗺️ 旅游项目概览
-              </h3>
-              <p className="text-white/60 text-sm mb-4">
-                本次旅行包含 {projects.length} 个精彩项目，AI 已为您规划好完整行程
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 旅游项目 */}
+            <section className="space-y-6">
+              <div className="px-1">
+                <p className="text-[11px] font-medium tracking-[0.25em] uppercase text-cyan-400/80 mb-2">旅游项目</p>
+                <h3 className="text-3xl md:text-4xl font-bold text-white mb-2">探索行程</h3>
+                <p className="text-white/60 text-sm md:text-base">本次旅行包含 {projects.length} 个精彩项目</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {projects.map((project, index) => (
                   <div
                     key={project.id}
-                    className="bg-white/5 border border-white/10 rounded-xl p-4"
+                    className="group relative rounded-2xl overflow-hidden bg-[linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))] border border-white/[0.08] shadow-lg transition-all duration-300 hover:shadow-[0_30px_60px_rgba(0,0,0,0.4)] hover:-translate-y-1"
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="w-6 h-6 bg-indigo-500/30 text-indigo-400 rounded-full flex items-center justify-center text-xs font-bold">
+                    <div className="relative aspect-[16/10] overflow-hidden">
+                      {project.coverImage ? (
+                        <img
+                          src={project.coverImage}
+                          alt={project.name}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#2a2a4a] to-[#1a1a3a] text-5xl">
+                          🗺️
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                      <span className="absolute top-3 left-3 w-7 h-7 rounded-full bg-indigo-500/80 text-white text-xs font-bold flex items-center justify-center shadow-md">
                         {index + 1}
                       </span>
-                      <h4 className="text-white font-medium text-sm">{project.name}</h4>
                     </div>
-                    <p className="text-white/50 text-xs line-clamp-2">{project.description}</p>
-                    <div className="flex gap-2 mt-2">
-                      {project.tags?.slice(0, 2).map((tag, i) => (
-                        <span key={i} className="px-1.5 py-0.5 bg-white/10 text-white/60 rounded text-xs">
-                          {tag}
-                        </span>
-                      ))}
+                    <div className="p-5 space-y-2">
+                      <h4 className="text-white font-semibold text-base line-clamp-1">{project.name}</h4>
+                      <p className="text-white/55 text-xs leading-relaxed line-clamp-2">{project.description}</p>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
 
             {/* 开始旅行 */}
             <div className="bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/10 rounded-2xl p-8 text-center">

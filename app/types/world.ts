@@ -49,6 +49,11 @@ export interface World {
     /** 视觉风格设定（确保整个世界图片风格统一） */
     visualStyle?: WorldVisualStyle;
 
+    /** 世界概况图片（1-3 张，用于展示地理/氛围） */
+    overviewImages?: string[];
+    /** 特色文化图片（1-3 张，用于展示文化/生活） */
+    cultureImages?: string[];
+
     // === 风土人情 ===
     /** 地理特征描述 */
     geography: string;

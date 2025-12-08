@@ -26,6 +26,8 @@ export type AICallType =
     | 'generate_dialog'
     | 'generate_text'
     | 'image_world_cover'
+    | 'image_world_overview'
+    | 'image_world_culture'
     | 'image_project_cover'
     | 'image_spot'
     | 'image_npc_portrait'

@@ -151,6 +151,58 @@ High quality, 8K resolution.`;
 }
 
 /**
+ * 生成世界概况图提示词（突出地理和整体氛围）
+ */
+export function buildWorldOverviewPrompts(world: {
+    name: string;
+    geography: string;
+    climate: string;
+    description: string;
+    tags: string[];
+    visualStyle?: WorldVisualStyle;
+}): string[] {
+    const stylePrompt = buildVisualStylePrompt(world.visualStyle);
+
+    return [
+        `Hero shot of ${world.name} focusing on geography: ${world.geography}. Iconic natural landmark, sweeping composition, ${stylePrompt} Tags: ${world.tags.join(', ')}.`,
+        `Mood piece of ${world.name} showing climate and sky: ${world.climate}. Atmospheric light, weather details, ${stylePrompt} Tags: ${world.tags.join(', ')}.`,
+        `Signature place in ${world.name}: ${world.description}. Architectural and terrain blend, close-to-mid shot, rich details, ${stylePrompt} Tags: ${world.tags.join(', ')}.`,
+    ];
+}
+
+// 兼容单条调用（取首条）
+export function buildWorldOverviewPrompt(world: Parameters<typeof buildWorldOverviewPrompts>[0]): string {
+    return buildWorldOverviewPrompts(world)[0];
+}
+
+/**
+ * 生成世界特色文化图提示词（按要素拆分）
+ */
+export function buildWorldCulturePrompts(world: {
+    name: string;
+    culture: string;
+    cuisine: string;
+    inhabitants: string;
+    language: string;
+    currency: string;
+    tags: string[];
+    visualStyle?: WorldVisualStyle;
+}): string[] {
+    const stylePrompt = buildVisualStylePrompt(world.visualStyle);
+
+    return [
+        `Daily life of inhabitants in ${world.name}: ${world.inhabitants}. Clothing, gestures, and cultural vibe: ${world.culture}. Intimate street-level framing, ${stylePrompt} Tags: ${world.tags.join(', ')}.`,
+        `Food culture of ${world.name}: ${world.cuisine}. Market or dining scene, textures of ingredients, warm inviting light, ${stylePrompt} Tags: ${world.tags.join(', ')}.`,
+        `Communication and trade in ${world.name}: language ${world.language}, currency/trade style ${world.currency}. Signage, scripts, coins or tokens in use, mid-shot with human interaction, ${stylePrompt} Tags: ${world.tags.join(', ')}.`,
+    ];
+}
+
+// 兼容单条调用（取首条）
+export function buildWorldCulturePrompt(world: Parameters<typeof buildWorldCulturePrompts>[0]): string {
+    return buildWorldCulturePrompts(world)[0];
+}
+
+/**
  * 生成景点图片的提示词
  */
 export function buildSpotImagePrompt(spot: {
@@ -421,6 +473,50 @@ export async function image_generate_world_cover(
 }
 
 /**
+ * 生成世界概况图
+ */
+export async function image_generate_world_overview(
+    world: Parameters<typeof buildWorldOverviewPrompts>[0] & { id?: string },
+    config: ImageGenerateConfig,
+    options?: ImageGenerateOptions
+): Promise<ImageGenerateResult[]> {
+    const prompts = buildWorldOverviewPrompts(world);
+    return image_generate_batch(
+        prompts,
+        config,
+        {
+            width: 1920,
+            height: 1080,
+            style: 'fantasy',
+            ...options,
+        },
+        `世界概况-${world.name}`
+    );
+}
+
+/**
+ * 生成世界特色文化图
+ */
+export async function image_generate_world_culture(
+    world: Parameters<typeof buildWorldCulturePrompts>[0] & { id?: string },
+    config: ImageGenerateConfig,
+    options?: ImageGenerateOptions
+): Promise<ImageGenerateResult[]> {
+    const prompts = buildWorldCulturePrompts(world);
+    return image_generate_batch(
+        prompts,
+        config,
+        {
+            width: 1920,
+            height: 1080,
+            style: 'fantasy',
+            ...options,
+        },
+        `世界文化-${world.name}`
+    );
+}
+
+/**
  * 生成景点图片
  */
 export async function image_generate_spot(
@@ -508,6 +604,8 @@ export const imageGenerator = {
     generate: image_generate,
     batch: image_generate_batch,
     worldCover: image_generate_world_cover,
+    worldOverview: image_generate_world_overview,
+    worldCulture: image_generate_world_culture,
     spot: image_generate_spot,
     npcPortrait: image_generate_npc_portrait,
     projectCover: image_generate_project_cover,
@@ -515,6 +613,8 @@ export const imageGenerator = {
     // 辅助函数
     buildPrompt: {
         worldCover: buildWorldCoverPrompt,
+        worldOverview: buildWorldOverviewPrompt,
+        worldCulture: buildWorldCulturePrompt,
         spot: buildSpotImagePrompt,
         npcPortrait: buildNPCPortraitPrompt,
         projectCover: buildProjectCoverPrompt,

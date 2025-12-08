@@ -35,7 +35,7 @@ let initPromise: Promise<SqlJsDatabase> | null = null;
 // ============================================
 
 /** 当前数据库 schema 版本 */
-const CURRENT_DB_VERSION = 2;
+const CURRENT_DB_VERSION = 3;
 
 /**
  * 数据库迁移定义
@@ -66,6 +66,12 @@ const migrations: Record<number, string[]> = {
         )`,
         `CREATE INDEX IF NOT EXISTS idx_currency_transactions_user ON currency_transactions(user_id)`,
         `CREATE INDEX IF NOT EXISTS idx_currency_transactions_created ON currency_transactions(created_at)`,
+    ],
+
+    // 版本 3: 世界图集
+    3: [
+        `ALTER TABLE worlds ADD COLUMN overview_images TEXT`,
+        `ALTER TABLE worlds ADD COLUMN culture_images TEXT`,
     ],
 };
 
@@ -280,6 +286,8 @@ function createTables(db: SqlJsDatabase): void {
             rules TEXT,
             best_time_to_visit TEXT,
             image_url TEXT,
+            overview_images TEXT,
+            culture_images TEXT,
             era TEXT,
             generation_status TEXT NOT NULL,
             created_at TEXT NOT NULL
@@ -623,9 +631,9 @@ export class SQLiteStorageProvider implements IStorageProvider {
             INSERT OR REPLACE INTO worlds (
                 id, name, subtitle, description, detailed_description, cover_image,
                 tags, geography, climate, culture, inhabitants, cuisine,
-                language, currency, rules, best_time_to_visit, image_url, era,
-                generation_status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                language, currency, rules, best_time_to_visit, image_url, overview_images,
+                culture_images, era, generation_status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             world.id,
             world.name,
@@ -644,6 +652,8 @@ export class SQLiteStorageProvider implements IStorageProvider {
             world.rules || null,
             world.bestTimeToVisit || null,
             world.imageUrl || null,
+            JSON.stringify(world.overviewImages || []),
+            JSON.stringify(world.cultureImages || []),
             world.era || null,
             world.generationStatus,
             world.createdAt,
@@ -693,6 +703,8 @@ export class SQLiteStorageProvider implements IStorageProvider {
             rules: obj.rules as string | undefined,
             bestTimeToVisit: obj.best_time_to_visit as string | undefined,
             imageUrl: obj.image_url as string | undefined,
+            overviewImages: obj.overview_images ? JSON.parse(obj.overview_images as string) : [],
+            cultureImages: obj.culture_images ? JSON.parse(obj.culture_images as string) : [],
             era: obj.era as string | undefined,
             generationStatus: obj.generation_status as World['generationStatus'],
             createdAt: obj.created_at as string,

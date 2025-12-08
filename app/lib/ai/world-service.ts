@@ -144,6 +144,8 @@ export class WorldGenerationService {
             id: generateId('world_'),
             ...descResult.data,
             coverImage: undefined,
+            overviewImages: [],
+            cultureImages: [],
             travelVehicle: undefined,
             travelProjects: [],
             createdAt: now(),
@@ -169,6 +171,7 @@ export class WorldGenerationService {
         // 4. 生成封面图（异步，不阻塞）
         log.step(4, 4, '启动封面图生成（异步）...');
         this.generateWorldCoverAsync(world);
+        this.generateWorldGalleriesAsync(world);
 
         // 5. 更新状态为 ready
         world.generationStatus = 'ready';
@@ -263,6 +266,7 @@ export class WorldGenerationService {
                     description: world.description,
                     geography: world.geography,
                     tags: world.tags,
+                    visualStyle: world.visualStyle,
                 },
                 this.config.image
             );
@@ -272,6 +276,54 @@ export class WorldGenerationService {
             }
         } catch (error) {
             console.error('Failed to generate world cover:', error);
+        }
+    }
+
+    /**
+     * 异步生成世界概况与文化图片
+     */
+    private async generateWorldGalleriesAsync(world: World): Promise<void> {
+        try {
+            const [overviewResults, cultureResults] = await Promise.all([
+                imageGenerator.worldOverview(
+                    {
+                        id: world.id,
+                        name: world.name,
+                        geography: world.geography,
+                        climate: world.climate,
+                        description: world.description,
+                        tags: world.tags,
+                        visualStyle: world.visualStyle,
+                    },
+                    this.config.image,
+                    { width: 1600, height: 900 }
+                ),
+                imageGenerator.worldCulture(
+                    {
+                        id: world.id,
+                        name: world.name,
+                        culture: world.culture,
+                        cuisine: world.cuisine,
+                        inhabitants: world.inhabitants,
+                        language: world.language,
+                        currency: world.currency,
+                        tags: world.tags,
+                        visualStyle: world.visualStyle,
+                    },
+                    this.config.image,
+                    { width: 1600, height: 900 }
+                ),
+            ]);
+
+            world.overviewImages = overviewResults
+                .filter(r => r.success && r.url)
+                .map(r => r.url!);
+
+            world.cultureImages = cultureResults
+                .filter(r => r.success && r.url)
+                .map(r => r.url!);
+        } catch (error) {
+            console.error('Failed to generate world galleries:', error);
         }
     }
 
