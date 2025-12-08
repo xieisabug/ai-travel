@@ -12,6 +12,7 @@ import {
     WorldGenerationService,
     type WorldServiceConfig,
 } from '../app/lib/ai/world-service';
+import { ai_generate_npc_dialog, type DialogLine } from '../app/lib/ai/generate';
 import { getStorage } from './storage/sqlite';
 import { taskQueue, type Task } from './task-queue';
 import { apiLogger } from './logger';
@@ -33,7 +34,12 @@ import type {
     World,
     TravelProject,
     GenerateWorldRequest,
+    Spot,
+    SpotNPC,
+    DialogScript,
+    DialogScriptType,
 } from '../app/types/world';
+import { toNPCPublicProfile } from '../app/types/world';
 import type {
     User,
     LoginRequest,
@@ -69,6 +75,11 @@ const worldApi = new Hono();
 const AUTH_COOKIE_NAME = 'ai_travel_token';
 /** Cookie 有效期（7天） */
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+
+/** 简单 ID 生成 */
+function generateId(prefix: string = ''): string {
+    return `${prefix}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 /**
  * 从请求中获取当前用户
@@ -121,6 +132,67 @@ function getWorldService(): WorldGenerationService {
     };
 
     return new WorldGenerationService(config);
+}
+
+async function preGenerateDialogScriptsForProject(
+    project: TravelProject,
+    world: World,
+    storage: ReturnType<typeof getStorage>
+): Promise<void> {
+    const config = {
+        apiKey: process.env.OPENAI_API_KEY || '',
+        baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    };
+
+    const dialogTypes: DialogScriptType[] = ['entry', 'chat'];
+
+    for (const spot of project.spots) {
+        for (const npc of spot.npcs) {
+            for (const dialogType of dialogTypes) {
+                const existing = await storage.getDialogScripts({
+                    npcId: npc.id,
+                    spotId: spot.id,
+                    type: dialogType,
+                    isActive: true,
+                    limit: 1,
+                });
+
+                if (existing.length > 0) {
+                    continue;
+                }
+
+                const result = await ai_generate_npc_dialog(
+                    {
+                        npc,
+                        spot,
+                        world,
+                        dialogType,
+                    },
+                    config
+                );
+
+                if (result.success && result.data) {
+                    const script: DialogScript = {
+                        id: generateId('dlg_'),
+                        npcId: npc.id,
+                        spotId: spot.id,
+                        type: dialogType,
+                        lines: result.data,
+                        condition: undefined,
+                        order: 0,
+                        isActive: true,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    };
+                    await storage.saveDialogScript(script);
+                    apiLogger.info(`🗂️ 预生成对话脚本 ${script.id} (${dialogType})`);
+                } else {
+                    apiLogger.warn(`预生成对话失败: ${npc.name} (${dialogType})`, result.error);
+                }
+            }
+        }
+    }
 }
 
 // ============================================
@@ -459,7 +531,7 @@ worldApi.post('/projects/:id/generate', async (c) => {
         const task = taskQueue.createTask<TravelProject>('generate_project_details', async (updateProgress) => {
             const service = getWorldService();
 
-            updateProgress({ current: 0, total: 3, message: '准备生成项目详情...' });
+            updateProgress({ current: 0, total: 4, message: '准备生成项目详情...' });
 
             // 生成项目详情
             const result = await service.generateProjectDetails(
@@ -471,10 +543,14 @@ worldApi.post('/projects/:id/generate', async (c) => {
                 throw new Error(result.error || 'Failed to generate project details');
             }
 
-            updateProgress({ current: 2, total: 3, message: '保存项目数据...' });
+            // 预生成 NPC 对话脚本并存储
+            updateProgress({ current: 2, total: 4, message: '预生成 NPC 对话...' });
+            await preGenerateDialogScriptsForProject(targetProject!, targetWorld!, storage);
+
+            updateProgress({ current: 3, total: 4, message: '保存项目数据...' });
             await storage.saveWorld(targetWorld!);
 
-            updateProgress({ current: 3, total: 3, message: '完成!' });
+            updateProgress({ current: 4, total: 4, message: '完成!' });
             return targetProject!;
         });
 
@@ -534,6 +610,8 @@ worldApi.get('/projects/:id', async (c) => {
 /**
  * 获取项目景点详情
  * GET /api/projects/:projectId/spots/:spotId
+ *
+ * 返回的 NPC 数据已过滤敏感信息（personality, backstory, speakingStyle, interests）
  */
 worldApi.get('/projects/:projectId/spots/:spotId', async (c) => {
     try {
@@ -548,7 +626,12 @@ worldApi.get('/projects/:projectId/spots/:spotId', async (c) => {
             if (project) {
                 const spot = project.spots.find(s => s.id === spotId);
                 if (spot) {
-                    return c.json(spot);
+                    // 过滤 NPC 敏感数据
+                    const filteredSpot = {
+                        ...spot,
+                        npcs: spot.npcs.map(npc => toNPCPublicProfile(npc)),
+                    };
+                    return c.json(filteredSpot);
                 }
             }
         }
@@ -726,12 +809,16 @@ worldApi.post('/sessions/:id/next-spot', async (c) => {
         // 保存更新后的会话
         await storage.saveSession(session);
 
-        // 获取当前景点
+        // 获取当前景点（过滤 NPC 敏感数据）
         const currentSpot = project.spots.find(s => s.id === session.currentSpotId);
+        const filteredSpot = currentSpot ? {
+            ...currentSpot,
+            npcs: currentSpot.npcs.map(npc => toNPCPublicProfile(npc)),
+        } : undefined;
 
         return c.json({
             session,
-            spot: currentSpot,
+            spot: filteredSpot,
         });
     } catch (error) {
         return c.json({
@@ -1242,6 +1329,89 @@ worldApi.put('/admin/users/:id/status', async (c) => {
 });
 
 // ============================================
+// 对话脚本管理 API (管理员)
+// ============================================
+
+worldApi.get('/admin/dialog-scripts', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const npcId = c.req.query('npcId');
+    const spotId = c.req.query('spotId');
+    const type = c.req.query('type') as DialogScriptType | undefined;
+
+    const storage = getStorage();
+    const scripts = await storage.getDialogScripts({ npcId: npcId || undefined, spotId: spotId || undefined, type });
+
+    return c.json({ success: true, scripts });
+});
+
+worldApi.post('/admin/dialog-scripts', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const body = await c.req.json<Omit<DialogScript, 'id' | 'createdAt' | 'updatedAt'>>();
+
+    const script: DialogScript = {
+        ...body,
+        id: generateId('dlg_'),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+
+    const storage = getStorage();
+    await storage.saveDialogScript(script);
+
+    apiLogger.info(`✅ 管理员 ${currentUser.username} 创建对话脚本 ${script.id}`);
+
+    return c.json({ success: true, script });
+});
+
+worldApi.put('/admin/dialog-scripts/:id', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const { id } = c.req.param();
+    const body = await c.req.json<DialogScript>();
+
+    const storage = getStorage();
+    const existing = await storage.getDialogScript(id);
+    if (!existing) {
+        return c.json({ success: false, error: '脚本不存在' }, 404);
+    }
+
+    const script: DialogScript = {
+        ...existing,
+        ...body,
+        id,
+        updatedAt: new Date().toISOString(),
+    };
+
+    await storage.saveDialogScript(script);
+
+    apiLogger.info(`✅ 管理员 ${currentUser.username} 更新对话脚本 ${id}`);
+
+    return c.json({ success: true, script });
+});
+
+worldApi.delete('/admin/dialog-scripts/:id', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const { id } = c.req.param();
+    const storage = getStorage();
+    await storage.deleteDialogScript(id);
+
+    apiLogger.info(`✅ 管理员 ${currentUser.username} 删除对话脚本 ${id}`);
+
+    return c.json({ success: true });
+});
+
+// ============================================
 // 世界管理 API (管理员)
 // ============================================
 
@@ -1448,6 +1618,126 @@ worldApi.put('/auth/profile', async (c) => {
         return c.json({
             success: false,
             error: error instanceof Error ? error.message : '更新失败',
+        }, 500);
+    }
+});
+
+// ============================================
+// 游戏 API - NPC 对话生成
+// ============================================
+
+/**
+ * 生成 NPC 对话
+ * POST /api/game/npc/:npcId/dialog
+ *
+ * 使用 NPC 的完整数据（包含敏感的 personality、backstory 等）在服务端生成对话，
+ * 只返回对话内容给前端，不返回敏感数据。
+ */
+worldApi.post('/game/npc/:npcId/dialog', async (c) => {
+    try {
+        const { npcId } = c.req.param();
+        const body = await c.req.json<{
+            sessionId: string;
+            spotId: string;
+            dialogType: 'entry' | 'chat';
+            previousDialog?: string[];
+        }>();
+
+        apiLogger.info(`🎭 生成 NPC 对话: ${npcId}`, { dialogType: body.dialogType });
+
+        const storage = getStorage();
+
+        // 查找 NPC 所在的景点和世界
+        const worlds = await storage.getAllWorlds();
+        let targetNPC: SpotNPC | null = null;
+        let targetSpot: Spot | null = null;
+        let targetWorld: World | null = null;
+
+        for (const world of worlds) {
+            for (const project of world.travelProjects) {
+                for (const spot of project.spots) {
+                    const npc = spot.npcs.find(n => n.id === npcId);
+                    if (npc) {
+                        targetNPC = npc;
+                        targetSpot = spot;
+                        targetWorld = world;
+                        break;
+                    }
+                }
+                if (targetNPC) break;
+            }
+            if (targetNPC) break;
+        }
+
+        if (!targetNPC || !targetSpot || !targetWorld) {
+            apiLogger.warn(`NPC 不存在: ${npcId}`);
+            return c.json({ error: 'NPC not found' }, 404);
+        }
+
+        // 先尝试读取已存储的脚本
+        const existingScripts = await storage.getDialogScripts({
+            npcId,
+            spotId: targetSpot.id,
+            type: body.dialogType,
+            isActive: true,
+            limit: 1,
+        });
+
+        if (existingScripts.length > 0) {
+            const script = existingScripts[0];
+            apiLogger.info(`✅ 使用已存储对话脚本: ${script.id}`);
+            return c.json({ dialogLines: script.lines });
+        }
+
+        // 未命中则调用 AI 生成并落库
+        const config = {
+            apiKey: process.env.OPENAI_API_KEY || '',
+            baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+            model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        };
+
+        const result = await ai_generate_npc_dialog(
+            {
+                npc: targetNPC,     // 完整 NPC 数据，包含 personality、backstory、speakingStyle
+                spot: targetSpot,
+                world: targetWorld,
+                dialogType: body.dialogType,
+                previousDialog: body.previousDialog,
+            },
+            config
+        );
+
+        if (!result.success || !result.data) {
+            apiLogger.error('对话生成失败', result.error);
+            return c.json({
+                error: result.error || '对话生成失败',
+            }, 500);
+        }
+
+        // 保存生成的脚本
+        const script: DialogScript = {
+            id: generateId('dlg_'),
+            npcId,
+            spotId: targetSpot.id,
+            type: body.dialogType,
+            lines: result.data,
+            condition: undefined,
+            order: 0,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+        await storage.saveDialogScript(script);
+
+        apiLogger.info(`✅ 对话生成并保存: ${script.id} (${result.data.length} 条)`);
+
+        return c.json({
+            dialogLines: result.data,
+        });
+    } catch (error) {
+        apiLogger.error('生成 NPC 对话失败', error);
+        return c.json({
+            error: error instanceof Error ? error.message : 'Unknown error',
         }, 500);
     }
 });

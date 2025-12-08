@@ -687,6 +687,109 @@ export async function ai_generate_travel_vehicle(
 }
 
 // ============================================
+// 游戏对话生成（用于前端游戏交互）
+// ============================================
+
+/**
+ * 对话行（用于前端打字机效果显示）
+ */
+export interface DialogLine {
+    speaker: string;
+    text: string;
+    emotion?: string;
+}
+
+/**
+ * 生成 NPC 游戏对话
+ * 专门为前端游戏交互设计，返回格式化的对话行列表
+ */
+export async function ai_generate_npc_dialog(
+    params: {
+        npc: SpotNPC;
+        spot: Spot;
+        world: World;
+        dialogType: 'entry' | 'chat';
+        previousDialog?: string[];
+    },
+    config: AIGenerateConfig,
+    options?: GenerateOptions
+): Promise<GenerateResult<DialogLine[]>> {
+    const { npc, spot, world, dialogType, previousDialog } = params;
+
+    const dialogTypeDescription = dialogType === 'entry'
+        ? '玩家刚刚来到这个景点，这是第一次见面的入场对话'
+        : '玩家想要和 NPC 继续聊天';
+
+    const previousContext = previousDialog && previousDialog.length > 0
+        ? `\n\n之前的对话内容：\n${previousDialog.join('\n')}`
+        : '';
+
+    const prompt = `请为以下场景生成 NPC 对话。
+
+【NPC 信息】
+- 名称：${npc.name}
+- 角色：${npc.role}
+- 性格：${npc.personality.join('、')}
+- 说话风格：${npc.speakingStyle}
+- 背景故事：${npc.backstory}
+- 兴趣爱好：${npc.interests?.join('、') || '无'}
+
+【景点信息】
+- 景点名称：${spot.name}
+- 景点描述：${spot.description}
+- 景点故事：${spot.story}
+- 景点亮点：${spot.highlights.join('、')}
+
+【场景说明】
+${dialogTypeDescription}
+${previousContext}
+
+【生成要求】
+1. 对话必须完全符合 NPC 的性格和说话风格
+2. 内容要体现世界的文化特色
+3. ${dialogType === 'entry' ? '要包含对景点的介绍和欢迎语' : '可以聊一些有趣的话题，透露世界的秘密或趣事'}
+4. 每段对话控制在 30-80 字之间，适合打字机效果展示
+5. 生成 3-5 段对话
+6. 情绪要与对话内容匹配
+
+请以 JSON 格式返回：
+{
+    "dialogLines": [
+        {
+            "speaker": "${npc.name}",
+            "text": "对话内容",
+            "emotion": "neutral|happy|sad|surprised|angry|thinking 之一"
+        }
+    ]
+}`;
+
+    const enhancedSystemPrompt = buildEnhancedSystemPrompt(world);
+
+    const result = await callOpenAI<{ dialogLines: DialogLine[] }>(
+        prompt,
+        config,
+        options,
+        `生成游戏对话-${npc.name}`,
+        'generate_dialog',
+        { worldId: world.id, npcId: npc.id, spotId: spot.id },
+        enhancedSystemPrompt
+    );
+
+    if (result.success && result.data?.dialogLines) {
+        return {
+            success: true,
+            data: result.data.dialogLines,
+            usage: result.usage,
+        };
+    }
+
+    return {
+        success: false,
+        error: result.error || '对话生成失败',
+    };
+}
+
+// ============================================
 // 导出
 // ============================================
 
@@ -697,6 +800,7 @@ export const ai_generate = {
     spots: ai_generate_spots,
     npc: ai_generate_npc,
     dialog: ai_generate_dialog,
+    npcDialog: ai_generate_npc_dialog,
     text: ai_generate_text,
 };
 

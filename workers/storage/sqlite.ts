@@ -8,7 +8,7 @@
 import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 import path from 'path';
 import fs from 'fs';
-import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '../../app/types/world';
+import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession, DialogScript, DialogScriptType } from '../../app/types/world';
 import type { User, UserSession, UserListParams, PublicUser } from '../../app/types/user';
 import type { CurrencyTransaction, CurrencyTransactionType, DailyClaimResult } from '../../app/types/currency';
 import { DAILY_CLAIM_AMOUNT } from '../../app/types/currency';
@@ -419,6 +419,42 @@ function createTables(db: SqlJsDatabase): void {
         )
     `);
 
+    // 对话脚本表
+    db.run(`
+        CREATE TABLE IF NOT EXISTS dialog_scripts (
+            id TEXT PRIMARY KEY,
+            npc_id TEXT NOT NULL,
+            spot_id TEXT NOT NULL,
+            type TEXT NOT NULL,
+            lines TEXT NOT NULL,
+            condition TEXT,
+            order_num INTEGER DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (npc_id) REFERENCES npcs(id) ON DELETE CASCADE,
+            FOREIGN KEY (spot_id) REFERENCES spots(id) ON DELETE CASCADE
+        )
+    `);
+
+    // 对话脚本表
+    db.run(`
+        CREATE TABLE IF NOT EXISTS dialog_scripts (
+            id TEXT PRIMARY KEY,
+            npc_id TEXT NOT NULL,
+            spot_id TEXT NOT NULL,
+            type TEXT NOT NULL,
+            lines TEXT NOT NULL,
+            condition TEXT,
+            order_num INTEGER DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (npc_id) REFERENCES npcs(id) ON DELETE CASCADE,
+            FOREIGN KEY (spot_id) REFERENCES spots(id) ON DELETE CASCADE
+        )
+    `);
+
     // 用户表 (基础结构，不包含通过迁移添加的列)
     // 注意：currency_balance 和 last_daily_claim_date 通过迁移 v2 添加
     db.run(`
@@ -487,6 +523,9 @@ function createTables(db: SqlJsDatabase): void {
     db.run(`CREATE INDEX IF NOT EXISTS idx_ai_calls_created ON ai_calls(created_at)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_currency_transactions_user ON currency_transactions(user_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_currency_transactions_created ON currency_transactions(created_at)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_dialog_scripts_npc ON dialog_scripts(npc_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_dialog_scripts_spot ON dialog_scripts(spot_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_dialog_scripts_type ON dialog_scripts(type)`);
 }
 
 function saveToFile(): void {
@@ -1245,6 +1284,105 @@ export class SQLiteStorageProvider implements IStorageProvider {
     }
 
     // ============================================
+    // 对话脚本操作
+    // ============================================
+
+    async getDialogScript(id: string): Promise<DialogScript | null> {
+        const db = await this.getDb();
+        const result = db.exec(`SELECT * FROM dialog_scripts WHERE id = ?`, [id]);
+        if (result.length === 0 || result[0].values.length === 0) return null;
+        return this.rowToDialogScript(result[0].columns, result[0].values[0]);
+    }
+
+    async getDialogScripts(params: {
+        npcId?: string;
+        spotId?: string;
+        type?: DialogScriptType;
+        isActive?: boolean;
+        limit?: number;
+    } = {}): Promise<DialogScript[]> {
+        const db = await this.getDb();
+        const conditions: string[] = [];
+        const values: (string | number | null)[] = [];
+
+        if (params.npcId) {
+            conditions.push('npc_id = ?');
+            values.push(params.npcId);
+        }
+        if (params.spotId) {
+            conditions.push('spot_id = ?');
+            values.push(params.spotId);
+        }
+        if (params.type) {
+            conditions.push('type = ?');
+            values.push(params.type);
+        }
+        if (params.isActive !== undefined) {
+            conditions.push('is_active = ?');
+            values.push(params.isActive ? 1 : 0);
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+        const limit = params.limit || 100;
+
+        const result = db.exec(
+            `SELECT * FROM dialog_scripts ${whereClause} ORDER BY order_num ASC, created_at ASC LIMIT ?`,
+            [...values, limit] as (string | number | null | Uint8Array)[]
+        );
+
+        if (result.length === 0) return [];
+        return result[0].values.map(row => this.rowToDialogScript(result[0].columns, row));
+    }
+
+    async saveDialogScript(script: DialogScript): Promise<void> {
+        const db = await this.getDb();
+        db.run(`
+            INSERT OR REPLACE INTO dialog_scripts (
+                id, npc_id, spot_id, type, lines, condition, order_num,
+                is_active, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            script.id,
+            script.npcId,
+            script.spotId,
+            script.type,
+            JSON.stringify(script.lines),
+            script.condition || null,
+            script.order,
+            script.isActive ? 1 : 0,
+            script.createdAt,
+            script.updatedAt,
+        ]);
+        saveToFile();
+    }
+
+    async deleteDialogScript(id: string): Promise<void> {
+        const db = await this.getDb();
+        db.run(`DELETE FROM dialog_scripts WHERE id = ?`, [id]);
+        saveToFile();
+    }
+
+    private rowToDialogScript(columns: string[], row: unknown[]): DialogScript {
+        const obj: Record<string, unknown> = {};
+        columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
+
+        return {
+            id: obj.id as string,
+            npcId: obj.npc_id as string,
+            spotId: obj.spot_id as string,
+            type: obj.type as DialogScriptType,
+            lines: JSON.parse(obj.lines as string),
+            condition: obj.condition as string | undefined,
+            order: (obj.order_num as number) ?? 0,
+            isActive: (obj.is_active as number) === 1,
+            createdAt: obj.created_at as string,
+            updatedAt: obj.updated_at as string,
+        };
+    }
+
+    // ============================================
     // 用户操作
     // ============================================
 
@@ -1666,6 +1804,7 @@ export class SQLiteStorageProvider implements IStorageProvider {
         db.run(`DELETE FROM currency_transactions`);
         db.run(`DELETE FROM user_sessions`);
         db.run(`DELETE FROM users`);
+        db.run(`DELETE FROM dialog_scripts`);
         saveToFile();
     }
 
@@ -1685,12 +1824,16 @@ export class SQLiteStorageProvider implements IStorageProvider {
         // 获取所有 AI 调用记录
         const aiCalls = await this.getAICalls({ limit: 10000 });
 
+        // 获取所有对话脚本
+        const dialogScripts = await this.getDialogScripts({ limit: 10000 });
+
         const exportData: ExportData = {
             version: this.version,
             exportedAt: new Date().toISOString(),
             settings,
             worlds,
             aiCalls,
+            dialogScripts,
         };
 
         return JSON.stringify(exportData, null, 2);
@@ -1715,6 +1858,13 @@ export class SQLiteStorageProvider implements IStorageProvider {
         if (parsed.aiCalls) {
             for (const call of parsed.aiCalls) {
                 await this.saveAICall(call);
+            }
+        }
+
+        // 导入对话脚本
+        if (parsed.dialogScripts) {
+            for (const script of parsed.dialogScripts) {
+                await this.saveDialogScript(script);
             }
         }
     }

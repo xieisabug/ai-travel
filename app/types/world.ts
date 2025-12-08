@@ -375,6 +375,58 @@ export interface NPCDialogOption {
     condition?: string;
 }
 
+// ============================================
+// 对话脚本系统
+// ============================================
+
+/**
+ * 对话脚本类型
+ */
+export type DialogScriptType =
+    | 'entry'      // 入场对话（玩家进入景点时）
+    | 'chat'       // 闲聊对话
+    | 'quest'      // 任务对话
+    | 'shop'       // 商店对话
+    | 'farewell';  // 告别对话
+
+/**
+ * 对话脚本（预生成并存储在数据库中）
+ */
+export interface DialogScript {
+    /** 脚本 ID */
+    id: string;
+    /** 所属 NPC ID */
+    npcId: string;
+    /** 所属景点 ID */
+    spotId: string;
+    /** 对话类型 */
+    type: DialogScriptType;
+    /** 对话行列表 */
+    lines: DialogLine[];
+    /** 触发条件（可选） */
+    condition?: string;
+    /** 排序顺序（同类型多个脚本时） */
+    order: number;
+    /** 是否启用 */
+    isActive: boolean;
+    /** 创建时间 */
+    createdAt: string;
+    /** 更新时间 */
+    updatedAt: string;
+}
+
+/**
+ * 对话行
+ */
+export interface DialogLine {
+    /** 说话者名称 */
+    speaker: string;
+    /** 对话文本 */
+    text: string;
+    /** 表情 */
+    emotion?: NPCEmotion;
+}
+
 /**
  * NPC 生成状态
  */
@@ -384,6 +436,45 @@ export type NPCGenerationStatus =
     | 'generating_sprite' // 正在生成立绘
     | 'ready'             // 已就绪
     | 'error';            // 生成失败
+
+/**
+ * NPC 公开资料（返回给前端，不含敏感数据）
+ * 不包含：personality, backstory, speakingStyle, interests
+ */
+export interface NPCPublicProfile {
+    /** NPC 唯一标识 */
+    id: string;
+    /** NPC 名称 */
+    name: string;
+    /** NPC 角色（如：导游、店主、居民等） */
+    role: string;
+    /** NPC 简介 */
+    description: string;
+    /** 外貌描述 */
+    appearance: string;
+    /** 默认立绘 URL */
+    sprite?: string;
+    /** 各表情立绘 */
+    sprites?: Record<NPCEmotion, string>;
+    /** 生成状态 */
+    generationStatus: NPCGenerationStatus;
+}
+
+/**
+ * 将 SpotNPC 转换为 NPCPublicProfile（过滤敏感数据）
+ */
+export function toNPCPublicProfile(npc: SpotNPC): NPCPublicProfile {
+    return {
+        id: npc.id,
+        name: npc.name,
+        role: npc.role,
+        description: npc.description,
+        appearance: npc.appearance,
+        sprite: npc.sprite,
+        sprites: npc.sprites,
+        generationStatus: npc.generationStatus,
+    };
+}
 
 // ============================================
 // 玩家旅游状态

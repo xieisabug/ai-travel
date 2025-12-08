@@ -2,7 +2,7 @@
  * 存储提供者类型定义
  */
 
-import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession } from '../../app/types/world';
+import type { World, TravelProject, TravelVehicle, Spot, SpotNPC, TravelSession, DialogScript, DialogScriptType } from '../../app/types/world';
 import type { User, UserSession, UserListParams, PublicUser } from '../../app/types/user';
 import type { CurrencyTransaction, CurrencyTransactionType, DailyClaimResult } from '../../app/types/currency';
 
@@ -117,6 +117,7 @@ export interface ExportData {
     npcs?: SpotNPC[];
     sessions?: TravelSession[];
     aiCalls?: AICallRecord[];
+    dialogScripts?: DialogScript[];
 }
 
 /**
@@ -152,6 +153,18 @@ export interface IStorageProvider {
     getNPC(id: string): Promise<SpotNPC | null>;
     getNPCsBySpotId(spotId: string): Promise<SpotNPC[]>;
     saveNPC(npc: SpotNPC, spotId: string): Promise<void>;
+
+    // 对话脚本操作
+    getDialogScript(id: string): Promise<DialogScript | null>;
+    getDialogScripts(params?: {
+        npcId?: string;
+        spotId?: string;
+        type?: DialogScriptType;
+        isActive?: boolean;
+        limit?: number;
+    }): Promise<DialogScript[]>;
+    saveDialogScript(script: DialogScript): Promise<void>;
+    deleteDialogScript(id: string): Promise<void>;
 
     // 旅游会话操作
     getSession(id: string): Promise<TravelSession | null>;

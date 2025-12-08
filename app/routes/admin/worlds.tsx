@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '~/hooks/useAuth';
-import type { World, TravelVehicle, TravelProject, Spot, SpotNPC } from '~/types/world';
+import type { World, TravelVehicle, TravelProject, Spot, SpotNPC, DialogScript, DialogScriptType, DialogLine } from '~/types/world';
 import {
     buildNPCPortraitPrompt,
     buildProjectCoverPrompt,
@@ -980,6 +980,7 @@ function WorldEditor({
                                                                 <SpotEditor
                                                                     spot={spot}
                                                                     worldName={world.name}
+                                                                    spotId={spot.id}
                                                                     onUpdate={(field, value) => onUpdateSpot(project.id, spot.id, field, value)}
                                                                     onUpdateNpc={(npcId, field, value) => onUpdateNpc(project.id, spot.id, npcId, field, value)}
                                                                 />
@@ -1007,11 +1008,12 @@ function WorldEditor({
 interface SpotEditorProps {
     spot: Spot;
     worldName: string;
+    spotId: string;
     onUpdate: (field: keyof Spot, value: any) => void;
     onUpdateNpc: (npcId: string, field: keyof SpotNPC, value: any) => void;
 }
 
-function SpotEditor({ spot, worldName, onUpdate, onUpdateNpc }: SpotEditorProps) {
+function SpotEditor({ spot, worldName, spotId, onUpdate, onUpdateNpc }: SpotEditorProps) {
     const [expandedNpcs, setExpandedNpcs] = useState<Set<string>>(new Set());
 
     const toggleNpc = (npcId: string) => {
@@ -1160,10 +1162,134 @@ interface NpcEditorProps {
     npc: SpotNPC;
     worldName: string;
     spotName: string;
+    spotId: string;
     onUpdate: (field: keyof SpotNPC, value: any) => void;
 }
+function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProps) {
+    const dialogTypes: Array<{ type: DialogScriptType; label: string }> = [
+        { type: 'entry', label: '入场对话 (entry)' },
+        { type: 'chat', label: '闲聊对话 (chat)' },
+    ];
 
-function NpcEditor({ npc, worldName, spotName, onUpdate }: NpcEditorProps) {
+    const [dialogScripts, setDialogScripts] = useState<Record<DialogScriptType, DialogScript | null>>({ entry: null, chat: null });
+    const [loadingDialogs, setLoadingDialogs] = useState(false);
+    const [savingType, setSavingType] = useState<DialogScriptType | null>(null);
+
+    const loadDialogScripts = async () => {
+        try {
+            setLoadingDialogs(true);
+            const res = await fetch(`/api/admin/dialog-scripts?npcId=${npc.id}`);
+            const data = await res.json();
+            if (data.success && data.scripts) {
+                const next: Record<DialogScriptType, DialogScript | null> = { entry: null, chat: null } as Record<DialogScriptType, DialogScript | null>;
+                for (const script of data.scripts as DialogScript[]) {
+                    next[script.type] = script;
+                }
+                setDialogScripts(next);
+            }
+        } finally {
+            setLoadingDialogs(false);
+        }
+    };
+
+    useEffect(() => {
+        loadDialogScripts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [npc.id]);
+
+    const updateScriptState = (type: DialogScriptType, updater: (prev: DialogScript | null) => DialogScript | null) => {
+        setDialogScripts(prev => ({ ...prev, [type]: updater(prev[type]) }));
+    };
+
+    const handleLineChange = (type: DialogScriptType, index: number, field: keyof DialogLine, value: string) => {
+        updateScriptState(type, (prev) => {
+            const base: DialogScript = prev ?? {
+                id: '',
+                npcId: npc.id,
+                spotId,
+                type,
+                lines: [],
+                order: 0,
+                isActive: true,
+                createdAt: '',
+                updatedAt: '',
+            };
+            const lines = [...base.lines];
+            lines[index] = { ...lines[index], [field]: value } as DialogLine;
+            return { ...base, lines };
+        });
+    };
+
+    const handleAddLine = (type: DialogScriptType) => {
+        updateScriptState(type, (prev) => {
+            const base: DialogScript = prev ?? {
+                id: '',
+                npcId: npc.id,
+                spotId,
+                type,
+                lines: [],
+                order: 0,
+                isActive: true,
+                createdAt: '',
+                updatedAt: '',
+            };
+            return {
+                ...base,
+                lines: [...(base.lines || []), { speaker: npc.name, text: '', emotion: 'neutral' }],
+            };
+        });
+    };
+
+    const handleRemoveLine = (type: DialogScriptType, index: number) => {
+        updateScriptState(type, (prev) => {
+            if (!prev) return prev;
+            const lines = [...prev.lines];
+            lines.splice(index, 1);
+            return { ...prev, lines };
+        });
+    };
+
+    const handleSave = async (type: DialogScriptType) => {
+        const script = dialogScripts[type];
+        if (!script || script.lines.length === 0) {
+            alert('请先填写至少一行对话');
+            return;
+        }
+
+        setSavingType(type);
+        try {
+            const hasId = Boolean(script.id);
+            const payload = {
+                npcId: npc.id,
+                spotId,
+                type,
+                lines: script.lines,
+                condition: script.condition,
+                order: script.order || 0,
+                isActive: script.isActive ?? true,
+            };
+
+            const res = await fetch(hasId ? `/api/admin/dialog-scripts/${script.id}` : '/api/admin/dialog-scripts', {
+                method: hasId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(hasId ? { ...script, ...payload } : payload),
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                const saved: DialogScript = data.script;
+                setDialogScripts(prev => ({ ...prev, [type]: saved }));
+            } else {
+                alert(data.error || '保存失败');
+            }
+        } catch (err) {
+            console.error('保存对话脚本失败', err);
+            alert('保存对话脚本失败');
+        } finally {
+            setSavingType(null);
+        }
+    };
+
     return (
         <>
             <div className="grid grid-cols-2 gap-3">
@@ -1247,6 +1373,86 @@ function NpcEditor({ npc, worldName, spotName, onUpdate }: NpcEditorProps) {
                     <option value="error">错误</option>
                 </select>
             </FormField>
+
+            <div className="pt-3 border-t border-white/10 space-y-4">
+                <div className="flex items-center justify-between">
+                    <h6 className="text-sm font-medium text-white/80">对话脚本</h6>
+                    {loadingDialogs && <span className="text-xs text-white/50">加载中...</span>}
+                </div>
+                {dialogTypes.map(({ type, label }) => {
+                    const script = dialogScripts[type];
+                    return (
+                        <div key={type} className="border border-white/10 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">{label}</span>
+                                <button
+                                    onClick={() => handleAddLine(type)}
+                                    className="text-xs px-2 py-1 bg-white/10 rounded hover:bg-white/20"
+                                >
+                                    添加行
+                                </button>
+                            </div>
+                            {(script?.lines || []).map((line, idx) => (
+                                <div key={`${type}-line-${idx}`} className="grid grid-cols-12 gap-2 items-center">
+                                    <input
+                                        className="form-input col-span-2"
+                                        placeholder="Speaker"
+                                        value={line.speaker}
+                                        onChange={(e) => handleLineChange(type, idx, 'speaker', e.target.value)}
+                                    />
+                                    <input
+                                        className="form-input col-span-8"
+                                        placeholder="Text"
+                                        value={line.text}
+                                        onChange={(e) => handleLineChange(type, idx, 'text', e.target.value)}
+                                    />
+                                    <input
+                                        className="form-input col-span-1"
+                                        placeholder="Emotion"
+                                        value={line.emotion || ''}
+                                        onChange={(e) => handleLineChange(type, idx, 'emotion', e.target.value)}
+                                    />
+                                    <button
+                                        onClick={() => handleRemoveLine(type, idx)}
+                                        className="text-xs text-red-300 hover:text-red-200"
+                                    >
+                                        删除
+                                    </button>
+                                </div>
+                            ))}
+                            {(script?.lines?.length || 0) === 0 && (
+                                <div className="text-xs text-white/50">暂无内容，点击上方“添加行”开始编辑。</div>
+                            )}
+                            <div className="flex items-center justify-end gap-3 pt-2">
+                                <label className="text-xs text-white/60 flex items-center gap-1">
+                                    顺序
+                                    <input
+                                        type="number"
+                                        className="form-input w-20"
+                                        value={script?.order ?? 0}
+                                        onChange={(e) => updateScriptState(type, (prev) => prev ? { ...prev, order: parseInt(e.target.value || '0') } : prev)}
+                                    />
+                                </label>
+                                <label className="text-xs text-white/60 flex items-center gap-1">
+                                    <input
+                                        type="checkbox"
+                                        checked={script?.isActive ?? true}
+                                        onChange={(e) => updateScriptState(type, (prev) => prev ? { ...prev, isActive: e.target.checked } : prev)}
+                                    />
+                                    启用
+                                </label>
+                                <button
+                                    onClick={() => handleSave(type)}
+                                    disabled={savingType === type}
+                                    className="text-xs px-3 py-1 rounded bg-gradient-to-r from-indigo-500 to-purple-600 disabled:opacity-50"
+                                >
+                                    {savingType === type ? '保存中...' : '保存脚本'}
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         </>
     );
 }

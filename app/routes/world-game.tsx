@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { TravelSession, Spot, SpotNPC, TravelMemory } from '~/types/world';
+import type { TravelSession, Spot, NPCPublicProfile, TravelMemory } from '~/types/world';
 
 type GamePhase = 'loading' | 'departing' | 'traveling' | 'exploring' | 'dialog' | 'returning' | 'completed';
 
@@ -18,7 +18,8 @@ export default function WorldGamePage() {
   const [phase, setPhase] = useState<GamePhase>('loading');
   const [session, setSession] = useState<TravelSession | null>(null);
   const [currentSpot, setCurrentSpot] = useState<Spot | null>(null);
-  const [currentNPC, setCurrentNPC] = useState<SpotNPC | null>(null);
+  const [currentNPC, setCurrentNPC] = useState<NPCPublicProfile | null>(null);
+  const [isGeneratingDialog, setIsGeneratingDialog] = useState(false);
   const [dialogLines, setDialogLines] = useState<DialogLine[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [displayedText, setDisplayedText] = useState('');
@@ -69,7 +70,7 @@ export default function WorldGamePage() {
     }
   }, [sessionId]);
 
-  // 加载景点数据
+  // 加载景点数据（NPC 数据已被后端过滤，不包含敏感信息）
   const loadSpot = async (projectId: string, spotId: string) => {
     // 如果 spotId 为空，不进行请求
     if (!spotId) {
@@ -80,12 +81,13 @@ export default function WorldGamePage() {
     try {
       const response = await fetch(`/api/projects/${projectId}/spots/${spotId}`);
       if (!response.ok) throw new Error('加载景点失败');
-      const spot: Spot = await response.json();
+      // 返回的 spot.npcs 是 NPCPublicProfile[] 类型，不包含敏感数据
+      const spot = await response.json() as Spot;
       setCurrentSpot(spot);
 
       // 生成入场对话
       if (spot.npcs && spot.npcs.length > 0) {
-        const npc = spot.npcs[0];
+        const npc = spot.npcs[0] as unknown as NPCPublicProfile;
         setCurrentNPC(npc);
         generateEntryDialog(spot, npc);
       }
@@ -113,8 +115,9 @@ export default function WorldGamePage() {
       if (data.spot) {
         setCurrentSpot(data.spot);
         if (data.spot.npcs && data.spot.npcs.length > 0) {
-          setCurrentNPC(data.spot.npcs[0]);
-          generateEntryDialog(data.spot, data.spot.npcs[0]);
+          const npc = data.spot.npcs[0] as unknown as NPCPublicProfile;
+          setCurrentNPC(npc);
+          generateEntryDialog(data.spot, npc);
         } else {
           setPhase('exploring');
         }
@@ -130,18 +133,41 @@ export default function WorldGamePage() {
     }
   };
 
-  // 生成入场对话
-  const generateEntryDialog = async (spot: Spot, npc: SpotNPC) => {
-    // 模拟生成对话（实际项目中应该调用 AI 接口）
-    const lines: DialogLine[] = [
-      { speaker: npc.name, text: `欢迎来到${spot.name}！我是${npc.name}，${npc.role}。`, emotion: 'happy' },
-      { speaker: npc.name, text: spot.description, emotion: 'neutral' },
-      { speaker: npc.name, text: `${spot.story}`, emotion: 'thinking' },
-      { speaker: npc.name, text: `这里有很多值得探索的地方，${spot.highlights.join('、')}都非常值得一看。`, emotion: 'happy' },
-    ];
-    setDialogLines(lines);
-    setCurrentLineIndex(0);
+  // 生成入场对话（调用后端 API，使用 NPC 完整数据生成）
+  const generateEntryDialog = async (spot: Spot, npc: NPCPublicProfile) => {
+    setIsGeneratingDialog(true);
     setPhase('dialog');
+
+    try {
+      const response = await fetch(`/api/game/npc/${npc.id}/dialog`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session?.id,
+          spotId: spot.id,
+          dialogType: 'entry',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('对话生成失败');
+      }
+
+      const data = await response.json() as { dialogLines: DialogLine[] };
+      setDialogLines(data.dialogLines);
+      setCurrentLineIndex(0);
+    } catch (err) {
+      console.error('生成对话失败:', err);
+      // 如果 AI 生成失败，使用简单的备用对话
+      const fallbackLines: DialogLine[] = [
+        { speaker: npc.name, text: `欢迎来到${spot.name}！我是${npc.name}，${npc.role}。`, emotion: 'happy' },
+        { speaker: npc.name, text: spot.description, emotion: 'neutral' },
+      ];
+      setDialogLines(fallbackLines);
+      setCurrentLineIndex(0);
+    } finally {
+      setIsGeneratingDialog(false);
+    }
   };
 
   // 打字机效果
@@ -217,8 +243,9 @@ export default function WorldGamePage() {
       if (data.spot) {
         setCurrentSpot(data.spot);
         if (data.spot.npcs && data.spot.npcs.length > 0) {
-          setCurrentNPC(data.spot.npcs[0]);
-          generateEntryDialog(data.spot, data.spot.npcs[0]);
+          const npc = data.spot.npcs[0] as unknown as NPCPublicProfile;
+          setCurrentNPC(npc);
+          generateEntryDialog(data.spot, npc);
         }
       }
     } catch (err) {
@@ -355,11 +382,12 @@ export default function WorldGamePage() {
 
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-wrap justify-center gap-3 z-20">
           {currentNPC && (
-            <button 
-              className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-6 py-3 rounded-xl text-base font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_15px_30px_rgba(102,126,234,0.4)]"
+            <button
+              className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-6 py-3 rounded-xl text-base font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_15px_30px_rgba(102,126,234,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => generateEntryDialog(currentSpot, currentNPC)}
+              disabled={isGeneratingDialog}
             >
-              💬 与 {currentNPC.name} 交谈
+              {isGeneratingDialog ? '⏳ 正在生成对话...' : `💬 与 ${currentNPC.name} 交谈`}
             </button>
           )}
           <button 
@@ -397,7 +425,26 @@ export default function WorldGamePage() {
   }
 
   // 对话模式
-  if (phase === 'dialog' && currentNPC && dialogLines.length > 0) {
+  if (phase === 'dialog' && currentNPC) {
+    // 显示加载状态
+    if (isGeneratingDialog || dialogLines.length === 0) {
+      return (
+        <div className="min-h-screen relative overflow-hidden bg-black">
+          <div
+            className="absolute inset-0 bg-cover bg-center brightness-[0.7]"
+            style={{ backgroundImage: currentSpot?.image ? `url(${currentSpot.image})` : undefined }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-white/20 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-white/70">正在生成对话...</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const currentLine = dialogLines[currentLineIndex];
 
     return (
