@@ -5,12 +5,23 @@ import type { World, TravelVehicle, TravelProject, Spot, SpotNPC, DialogScript, 
 import {
     buildWorldCoverPrompt,
     buildWorldOverviewPrompt,
+    buildWorldOverviewPrompts,
     buildWorldCulturePrompt,
+    buildWorldCulturePrompts,
     buildTravelVehiclePrompt,
     buildProjectCoverPrompt,
     buildSpotImagePrompt,
     buildNPCPortraitPrompt,
 } from '~/lib/ai/image-generate';
+
+const copyPrompt = async (text?: string) => {
+    if (!text) return;
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch (error) {
+        console.error('复制提示词失败', error);
+    }
+};
 
 // ============================================
 // 类型定义
@@ -617,6 +628,74 @@ function WorldEditor({
                             />
                         </FormField>
                         <FormField label="世界概况图集 (1-3 张)">
+                            <div className="flex flex-wrap gap-2 mb-3 text-xs text-white/70">
+                                <button
+                                    type="button"
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
+                                    title={(buildWorldOverviewPrompts({
+                                        name: world.name,
+                                        geography: world.geography,
+                                        climate: world.climate,
+                                        description: world.description,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[0])}
+                                    onClick={() => copyPrompt(buildWorldOverviewPrompts({
+                                        name: world.name,
+                                        geography: world.geography,
+                                        climate: world.climate,
+                                        description: world.description,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[0])}
+                                >
+                                    复制地理/地貌 prompt
+                                </button>
+                                <button
+                                    type="button"
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
+                                    title={(buildWorldOverviewPrompts({
+                                        name: world.name,
+                                        geography: world.geography,
+                                        climate: world.climate,
+                                        description: world.description,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[1])}
+                                    onClick={() => copyPrompt(buildWorldOverviewPrompts({
+                                        name: world.name,
+                                        geography: world.geography,
+                                        climate: world.climate,
+                                        description: world.description,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[1])}
+                                >
+                                    复制气候 prompt
+                                </button>
+                                <button
+                                    type="button"
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
+                                    title={(buildWorldOverviewPrompts({
+                                        name: world.name,
+                                        geography: world.geography,
+                                        climate: world.climate,
+                                        description: world.description,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[2])}
+                                    onClick={() => copyPrompt(buildWorldOverviewPrompts({
+                                        name: world.name,
+                                        geography: world.geography,
+                                        climate: world.climate,
+                                        description: world.description,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[2])}
+                                >
+                                    复制地标/场景 prompt
+                                </button>
+                            </div>
                             <div className="space-y-3">
                                 {(world.overviewImages || []).map((url, idx) => (
                                     <ImageUpload
@@ -649,6 +728,87 @@ function WorldEditor({
                             </div>
                         </FormField>
                         <FormField label="特色文化图集 (1-3 张)">
+                            <div className="flex flex-wrap gap-2 mb-3 text-xs text-white/70">
+                                <button
+                                    type="button"
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
+                                    title={(buildWorldCulturePrompts({
+                                        name: world.name,
+        
+                                        culture: world.culture,
+                                        cuisine: world.cuisine,
+                                        inhabitants: world.inhabitants,
+                                        language: world.language,
+                                        currency: world.currency,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[0])}
+                                    onClick={() => copyPrompt(buildWorldCulturePrompts({
+                                        name: world.name,
+                                        culture: world.culture,
+                                        cuisine: world.cuisine,
+                                        inhabitants: world.inhabitants,
+                                        language: world.language,
+                                        currency: world.currency,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[0])}
+                                >
+                                    复制人文/居民 prompt
+                                </button>
+                                <button
+                                    type="button"
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
+                                    title={(buildWorldCulturePrompts({
+                                        name: world.name,
+                                        culture: world.culture,
+                                        cuisine: world.cuisine,
+                                        inhabitants: world.inhabitants,
+                                        language: world.language,
+                                        currency: world.currency,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[1])}
+                                    onClick={() => copyPrompt(buildWorldCulturePrompts({
+                                        name: world.name,
+                                        culture: world.culture,
+                                        cuisine: world.cuisine,
+                                        inhabitants: world.inhabitants,
+                                        language: world.language,
+                                        currency: world.currency,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[1])}
+                                >
+                                    复制美食 prompt
+                                </button>
+                                <button
+                                    type="button"
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
+                                    title={(buildWorldCulturePrompts({
+                                        name: world.name,
+                                        culture: world.culture,
+                                        cuisine: world.cuisine,
+                                        inhabitants: world.inhabitants,
+                                        language: world.language,
+                                        currency: world.currency,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[2])}
+                                    onClick={() => copyPrompt(buildWorldCulturePrompts({
+                                        name: world.name,
+                                        culture: world.culture,
+                                        cuisine: world.cuisine,
+                                        inhabitants: world.inhabitants,
+                                        language: world.language,
+                                        currency: world.currency,
+                                        tags: world.tags || [],
+                                        visualStyle: world.visualStyle,
+                                    })[2])}
+                                >
+                                    复制语言/交易 prompt
+                                </button>
+                            </div>
                             <div className="space-y-3">
                                 {(world.cultureImages || []).map((url, idx) => (
                                     <ImageUpload
