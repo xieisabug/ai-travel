@@ -12,7 +12,7 @@ import {
     WorldGenerationService,
     type WorldServiceConfig,
 } from '../app/lib/ai/world-service';
-import { ai_generate_npc_dialog, type DialogLine } from '../app/lib/ai/generate';
+import { ai_generate_npc_dialog } from '../app/lib/ai/generate';
 import { getStorage } from './storage/sqlite';
 import { taskQueue, type Task } from './task-queue';
 import { apiLogger } from './logger';
@@ -38,6 +38,9 @@ import type {
     SpotNPC,
     DialogScript,
     DialogScriptType,
+    NPCEmotion,
+    NPCPublicProfile,
+    DialogLine,
 } from '../app/types/world';
 import { toNPCPublicProfile } from '../app/types/world';
 import type {
@@ -79,6 +82,19 @@ const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 /** 简单 ID 生成 */
 function generateId(prefix: string = ''): string {
     return `${prefix}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+type WorldWithNPCs = World & {
+    travelProjects: Array<TravelProject & {
+        spots: Array<Spot & { npcs?: SpotNPC[] }>
+    }>;
+};
+
+function normalizeDialogLines(lines: Array<{ speaker: string; text: string; emotion?: string }>): DialogLine[] {
+    return lines.map(line => ({
+        ...line,
+        emotion: line.emotion as NPCEmotion | undefined,
+    }));
 }
 
 /**
@@ -134,6 +150,51 @@ function getWorldService(): WorldGenerationService {
     return new WorldGenerationService(config);
 }
 
+async function getSpotWithNPCs(
+    projectId: string,
+    spotId: string,
+    storage: ReturnType<typeof getStorage>
+): Promise<{ spot: Spot; npcs: SpotNPC[] } | null> {
+    const spot = await storage.getSpot(spotId);
+    if (!spot || spot.projectId !== projectId) return null;
+
+    const npcIds = spot.npcIds?.length ? spot.npcIds : undefined;
+    const npcs = npcIds
+        ? await storage.getNPCsByIds(npcIds)
+        : await storage.getNPCsBySpotId(spot.id);
+
+    return { spot, npcs };
+}
+
+async function hydrateWorldWithPublicNPCs(
+    world: World,
+    storage: ReturnType<typeof getStorage>
+): Promise<WorldWithNPCs> {
+    const projects = await Promise.all(world.travelProjects.map(async project => {
+        const spots = await Promise.all(project.spots.map(async spot => {
+            const npcs = spot.npcIds?.length
+                ? await storage.getNPCsByIds(spot.npcIds)
+                : await storage.getNPCsBySpotId(spot.id);
+
+            return {
+                ...spot,
+                npcIds: spot.npcIds?.length ? spot.npcIds : npcs.map(n => n.id),
+                npcs,
+            };
+        }));
+
+        return {
+            ...project,
+            spots,
+        };
+    }));
+
+    return {
+        ...world,
+        travelProjects: projects,
+    } as WorldWithNPCs;
+}
+
 async function preGenerateDialogScriptsForProject(
     project: TravelProject,
     world: World,
@@ -145,10 +206,18 @@ async function preGenerateDialogScriptsForProject(
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     };
 
-    const dialogTypes: DialogScriptType[] = ['entry', 'chat'];
+    const dialogTypes: Array<'entry' | 'chat'> = ['entry', 'chat'];
 
     for (const spot of project.spots) {
-        for (const npc of spot.npcs) {
+        const npcs = spot.npcIds?.length
+            ? await storage.getNPCsByIds(spot.npcIds)
+            : spot.npcs?.length
+                ? spot.npcs
+                : await storage.getNPCsBySpotId(spot.id);
+
+        const fullNpcs = npcs.filter((n): n is SpotNPC => 'backstory' in n && 'personality' in n);
+
+        for (const npc of fullNpcs) {
             for (const dialogType of dialogTypes) {
                 const existing = await storage.getDialogScripts({
                     npcId: npc.id,
@@ -178,7 +247,7 @@ async function preGenerateDialogScriptsForProject(
                         npcId: npc.id,
                         spotId: spot.id,
                         type: dialogType,
-                        lines: result.data,
+                        lines: normalizeDialogLines(result.data),
                         condition: undefined,
                         order: 0,
                         isActive: true,
@@ -263,8 +332,7 @@ async function uploadToQiniu(fileName: string, buffer: Buffer, mimeType: string)
     qiniuConfig.useHttpsDomain = true;
     const zone = resolveQiniuZone(config.zone);
     if (zone) {
-        // @ts-expect-error qiniu 类型定义较旧，运行时可用
-        qiniuConfig.zone = zone;
+        (qiniuConfig as any).zone = zone;
     }
 
     const formUploader = new qiniu.form_up.FormUploader(qiniuConfig);
@@ -274,7 +342,7 @@ async function uploadToQiniu(fileName: string, buffer: Buffer, mimeType: string)
     const key = `${config.keyPrefix}${fileName}`;
 
     await new Promise<void>((resolve, reject) => {
-        formUploader.put(uploadToken, key, buffer, putExtra, (err, _body, info) => {
+        formUploader.put(uploadToken, key, buffer, putExtra, (err: Error | null, _body: any, info: any) => {
             if (err) return reject(err);
             if (!info || info.statusCode !== 200) {
                 const errorMessage = (info as any)?.data?.error || '上传失败';
@@ -360,8 +428,9 @@ worldApi.get('/worlds/:id', async (c) => {
                 error: 'World not found',
             }, 404);
         }
+        const hydratedWorld = await hydrateWorldWithPublicNPCs(world, storage);
 
-        return c.json(world);
+        return c.json(hydratedWorld);
     } catch (error) {
         apiLogger.error('获取世界详情失败', error);
         return c.json({
@@ -584,8 +653,21 @@ worldApi.get('/projects/:id', async (c) => {
         for (const world of worlds) {
             const project = world.travelProjects.find(p => p.id === id);
             if (project) {
+                const spotsWithNPCs = await Promise.all(project.spots.map(async spot => {
+                    const npcs = spot.npcIds?.length
+                        ? await storage.getNPCsByIds(spot.npcIds)
+                        : await storage.getNPCsBySpotId(spot.id);
+                    return {
+                        ...spot,
+                        npcs: npcs.map(npc => toNPCPublicProfile(npc)),
+                    };
+                }));
+
                 return c.json({
-                    project,
+                    project: {
+                        ...project,
+                        spots: spotsWithNPCs,
+                    },
                     world: {
                         id: world.id,
                         name: world.name,
@@ -619,27 +701,25 @@ worldApi.get('/projects/:projectId/spots/:spotId', async (c) => {
         apiLogger.debug(`查询景点: ${projectId}/${spotId}`);
         const storage = getStorage();
 
-        const worlds = await storage.getAllWorlds();
-
-        for (const world of worlds) {
-            const project = world.travelProjects.find(p => p.id === projectId);
-            if (project) {
-                const spot = project.spots.find(s => s.id === spotId);
-                if (spot) {
-                    // 过滤 NPC 敏感数据
-                    const filteredSpot = {
-                        ...spot,
-                        npcs: spot.npcs.map(npc => toNPCPublicProfile(npc)),
-                    };
-                    return c.json(filteredSpot);
-                }
-            }
+        const project = await storage.getProject(projectId);
+        if (!project) {
+            apiLogger.warn(`项目不存在: ${projectId}`);
+            return c.json({ error: 'Project not found' }, 404);
         }
 
-        apiLogger.warn(`景点不存在: ${spotId}`);
-        return c.json({
-            error: 'Spot not found',
-        }, 404);
+        const resolved = await getSpotWithNPCs(projectId, spotId, storage);
+        if (!resolved) {
+            apiLogger.warn(`景点不存在: ${spotId}`);
+            return c.json({ error: 'Spot not found' }, 404);
+        }
+
+        const { spot, npcs } = resolved;
+        const filteredSpot = {
+            ...spot,
+            npcs: npcs.map(npc => toNPCPublicProfile(npc)),
+        };
+
+        return c.json(filteredSpot);
     } catch (error) {
         apiLogger.error('获取景点详情失败', error);
         return c.json({
@@ -810,11 +890,16 @@ worldApi.post('/sessions/:id/next-spot', async (c) => {
         await storage.saveSession(session);
 
         // 获取当前景点（过滤 NPC 敏感数据）
-        const currentSpot = project.spots.find(s => s.id === session.currentSpotId);
-        const filteredSpot = currentSpot ? {
-            ...currentSpot,
-            npcs: currentSpot.npcs.map(npc => toNPCPublicProfile(npc)),
-        } : undefined;
+        let filteredSpot: Spot | undefined;
+        if (session.currentSpotId) {
+            const resolved = await getSpotWithNPCs(project.id, session.currentSpotId, storage);
+            if (resolved) {
+                filteredSpot = {
+                    ...resolved.spot,
+                    npcs: resolved.npcs.map(npc => toNPCPublicProfile(npc)),
+                };
+            }
+        }
 
         return c.json({
             session,
@@ -1412,6 +1497,83 @@ worldApi.delete('/admin/dialog-scripts/:id', async (c) => {
 });
 
 // ============================================
+// NPC 管理 API (管理员)
+// ============================================
+
+worldApi.get('/admin/npcs/:id', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const { id } = c.req.param();
+    const storage = getStorage();
+    const npc = await storage.getNPC(id);
+
+    if (!npc) {
+        return c.json({ success: false, error: 'NPC 不存在' }, 404);
+    }
+
+    return c.json({ success: true, npc });
+});
+
+worldApi.get('/admin/npcs', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const limit = parseInt(c.req.query('limit') || '200');
+    const offset = parseInt(c.req.query('offset') || '0');
+
+    const storage = getStorage();
+    const { npcs, total } = await storage.getAllNPCs({ limit, offset });
+
+    return c.json({ success: true, npcs, total });
+});
+
+worldApi.put('/admin/npcs/:id', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const { id } = c.req.param();
+    const storage = getStorage();
+    const npc = await storage.getNPC(id);
+
+    if (!npc) {
+        return c.json({ success: false, error: 'NPC 不存在' }, 404);
+    }
+
+    const body = await c.req.json<{
+        sprite?: string;
+        sprites?: Partial<Record<NPCEmotion, string>>;
+        generationStatus?: SpotNPC['generationStatus'];
+        name?: string;
+        role?: string;
+        description?: string;
+        appearance?: string;
+    }>();
+
+    const mergedSprites = body.sprites ? { ...(npc.sprites || {}), ...body.sprites } : npc.sprites;
+
+    const updatedNPC: SpotNPC = {
+        ...npc,
+        sprite: body.sprite ?? npc.sprite,
+        sprites: mergedSprites,
+        generationStatus: body.generationStatus ?? npc.generationStatus,
+        name: body.name ?? npc.name,
+        role: body.role ?? npc.role,
+        description: body.description ?? npc.description,
+        appearance: body.appearance ?? npc.appearance,
+    };
+
+    await storage.saveNPC(updatedNPC, npc.spotId);
+
+    apiLogger.info(`✅ 管理员 ${currentUser.username} 更新了 NPC ${id}`);
+
+    return c.json({ success: true, npc: updatedNPC });
+});
+
+// ============================================
 // 世界管理 API (管理员)
 // ============================================
 
@@ -1651,32 +1813,33 @@ worldApi.post('/game/npc/:npcId/dialog', async (c) => {
         apiLogger.info(`🎭 生成 NPC 对话: ${npcId}`, { dialogType: body.dialogType });
 
         const storage = getStorage();
-
-        // 查找 NPC 所在的景点和世界
-        const worlds = await storage.getAllWorlds();
-        let targetNPC: SpotNPC | null = null;
-        let targetSpot: Spot | null = null;
-        let targetWorld: World | null = null;
-
-        for (const world of worlds) {
-            for (const project of world.travelProjects) {
-                for (const spot of project.spots) {
-                    const npc = spot.npcs.find(n => n.id === npcId);
-                    if (npc) {
-                        targetNPC = npc;
-                        targetSpot = spot;
-                        targetWorld = world;
-                        break;
-                    }
-                }
-                if (targetNPC) break;
-            }
-            if (targetNPC) break;
-        }
-
-        if (!targetNPC || !targetSpot || !targetWorld) {
+        const targetNPC = await storage.getNPC(npcId);
+        if (!targetNPC) {
             apiLogger.warn(`NPC 不存在: ${npcId}`);
             return c.json({ error: 'NPC not found' }, 404);
+        }
+
+        const targetSpot = targetNPC.spotId ? await storage.getSpot(targetNPC.spotId) : null;
+        if (!targetSpot) {
+            apiLogger.warn(`NPC 缺少景点引用: ${npcId}`);
+            return c.json({ error: 'NPC spot not found' }, 404);
+        }
+
+        // 校验请求中的 spotId 与 NPC 归属一致
+        if (body.spotId && body.spotId !== targetSpot.id) {
+            apiLogger.warn(`NPC 归属景点不匹配: 请求 ${body.spotId}, 实际 ${targetSpot.id}`);
+        }
+
+        const targetProject = await storage.getProject(targetSpot.projectId);
+        if (!targetProject) {
+            apiLogger.warn(`NPC 所属项目不存在: ${targetSpot.projectId}`);
+            return c.json({ error: 'Project not found for NPC' }, 404);
+        }
+
+        const targetWorld = await storage.getWorld(targetProject.worldId);
+        if (!targetWorld) {
+            apiLogger.warn(`NPC 所属世界不存在: ${targetProject.worldId}`);
+            return c.json({ error: 'World not found for NPC' }, 404);
         }
 
         // 先尝试读取已存储的脚本
@@ -1725,7 +1888,7 @@ worldApi.post('/game/npc/:npcId/dialog', async (c) => {
             npcId,
             spotId: targetSpot.id,
             type: body.dialogType,
-            lines: result.data,
+            lines: normalizeDialogLines(result.data),
             condition: undefined,
             order: 0,
             isActive: true,
@@ -1737,7 +1900,7 @@ worldApi.post('/game/npc/:npcId/dialog', async (c) => {
         apiLogger.info(`✅ 对话生成并保存: ${script.id} (${result.data.length} 条)`);
 
         return c.json({
-            dialogLines: result.data,
+            dialogLines: normalizeDialogLines(result.data),
         });
     } catch (error) {
         apiLogger.error('生成 NPC 对话失败', error);

@@ -262,7 +262,17 @@ export interface Spot {
 
     // === NPC ===
     /** 该景点的 NPC 列表 */
-    npcs: SpotNPC[];
+    /**
+     * 关联的 NPC ID 列表（持久化使用）
+     * 景点本身只保存引用，NPC 详情独立存储，便于单独更新立绘与表情
+     */
+    npcIds: string[];
+
+    /**
+     * 解析后的 NPC 列表（运行时/接口可选返回）
+     * 为兼容旧逻辑保留，可按需填充或为空
+     */
+    npcs?: Array<SpotNPC | NPCPublicProfile>;
 
     // === 交互 ===
     /** 可交互热点 */
@@ -321,6 +331,8 @@ export interface SpotHotspot {
 export interface SpotNPC {
     /** NPC 唯一标识 */
     id: string;
+    /** 所属景点 ID（持久化/引用用） */
+    spotId?: string;
     /** NPC 名称 */
     name: string;
     /** NPC 角色（如：导游、店主、居民等） */
@@ -341,10 +353,15 @@ export interface SpotNPC {
     interests?: string[];
 
     // === 立绘 ===
-    /** 默认立绘 URL */
+    /**
+     * 全身/半身立绘 URL（对话和展示的默认形象）
+     */
     sprite?: string;
-    /** 各表情立绘 */
-    sprites?: Record<NPCEmotion, string>;
+    /**
+     * 各表情的特写立绘（情绪大头）
+     * key 需为 emotion: neutral|happy|sad|surprised|angry|thinking
+     */
+    sprites?: Partial<Record<NPCEmotion, string>>;
 
     // === 对话 ===
     /** 初次见面对话 */
@@ -451,6 +468,8 @@ export type NPCGenerationStatus =
 export interface NPCPublicProfile {
     /** NPC 唯一标识 */
     id: string;
+    /** 所属景点 ID（便于按景点查询/引用） */
+    spotId?: string;
     /** NPC 名称 */
     name: string;
     /** NPC 角色（如：导游、店主、居民等） */
@@ -462,7 +481,7 @@ export interface NPCPublicProfile {
     /** 默认立绘 URL */
     sprite?: string;
     /** 各表情立绘 */
-    sprites?: Record<NPCEmotion, string>;
+    sprites?: Partial<Record<NPCEmotion, string>>;
     /** 生成状态 */
     generationStatus: NPCGenerationStatus;
 }
@@ -479,6 +498,7 @@ export function toNPCPublicProfile(npc: SpotNPC): NPCPublicProfile {
         appearance: npc.appearance,
         sprite: npc.sprite,
         sprites: npc.sprites,
+        spotId: npc.spotId,
         generationStatus: npc.generationStatus,
     };
 }

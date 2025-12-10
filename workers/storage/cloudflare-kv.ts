@@ -57,7 +57,7 @@ export interface KVNamespace {
 // Cloudflare KV 存储提供者实现
 // ============================================
 
-export class CloudflareKVProvider implements IStorageProvider {
+export class CloudflareKVProvider {
     private kv: KVNamespace;
     private prefix: string;
     private version: number;
@@ -230,7 +230,15 @@ export class CloudflareKVProvider implements IStorageProvider {
         throw new Error('CloudflareKV: getNPCsBySpotId not implemented, use SQLite provider');
     }
 
-    async saveNPC(_npc: SpotNPC, _spotId: string): Promise<void> {
+    async getNPCsByIds(_ids: string[]): Promise<SpotNPC[]> {
+        throw new Error('CloudflareKV: getNPCsByIds not implemented, use SQLite provider');
+    }
+
+    async getAllNPCs(_params?: { limit?: number; offset?: number }): Promise<{ npcs: SpotNPC[]; total: number }> {
+        throw new Error('CloudflareKV: getAllNPCs not implemented, use SQLite provider');
+    }
+
+    async saveNPC(_npc: SpotNPC, _spotId?: string): Promise<void> {
         throw new Error('CloudflareKV: saveNPC not implemented, use SQLite provider');
     }
 

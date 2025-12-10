@@ -154,7 +154,9 @@ export interface IStorageProvider {
     // NPC 操作
     getNPC(id: string): Promise<SpotNPC | null>;
     getNPCsBySpotId(spotId: string): Promise<SpotNPC[]>;
-    saveNPC(npc: SpotNPC, spotId: string): Promise<void>;
+    getNPCsByIds(ids: string[]): Promise<SpotNPC[]>;
+    getAllNPCs(params?: { limit?: number; offset?: number }): Promise<{ npcs: SpotNPC[]; total: number }>;
+    saveNPC(npc: SpotNPC, spotId?: string): Promise<void>;
 
     // 对话脚本操作
     getDialogScript(id: string): Promise<DialogScript | null>;

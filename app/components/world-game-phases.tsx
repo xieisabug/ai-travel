@@ -181,6 +181,7 @@ interface DialogScreenProps {
   currentLineIndex: number;
   totalLines: number;
   speaker: string;
+  emotionSprite?: string;
   onContinue: () => void;
 }
 
@@ -192,6 +193,7 @@ export function DialogScreen({
   currentLineIndex,
   totalLines,
   speaker,
+  emotionSprite,
   onContinue,
 }: DialogScreenProps) {
   return (
@@ -203,8 +205,8 @@ export function DialogScreen({
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
 
       <div className="absolute bottom-[200px] left-1/2 -translate-x-1/2 z-[15]">
-        {npc.sprite ? (
-          <img src={npc.sprite} alt={npc.name} className="max-h-[400px] drop-shadow-2xl" />
+        {emotionSprite || npc.sprite ? (
+          <img src={emotionSprite || npc.sprite} alt={npc.name} className="max-h-[400px] drop-shadow-2xl" />
         ) : (
           <div className="flex flex-col items-center text-[8rem] text-white/80 drop-shadow-[0_0_20px_rgba(102,126,234,0.3)]">
             👤

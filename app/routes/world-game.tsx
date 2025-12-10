@@ -426,6 +426,9 @@ export default function WorldGamePage() {
     }
 
     const currentLine = dialogLines[currentLineIndex];
+    const emotionSprite = currentLine?.emotion && currentNPC.sprites
+      ? currentNPC.sprites[currentLine.emotion as keyof typeof currentNPC.sprites]
+      : undefined;
 
     return (
       <DialogScreen
@@ -436,6 +439,7 @@ export default function WorldGamePage() {
         currentLineIndex={currentLineIndex}
         totalLines={dialogLines.length}
         speaker={currentLine?.speaker || currentNPC.name}
+        emotionSprite={emotionSprite}
         onContinue={handleContinue}
       />
     );

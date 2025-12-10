@@ -10,7 +10,7 @@ app.route('/api', worldApi);
 // 处理 React Router 请求
 app.get("*", (c) => {
   const requestHandler = createRequestHandler(
-    () => import("virtual:react-router/server-build"),
+    () => import("virtual:react-router/server-build") as unknown as Promise<any>,
     import.meta.env.MODE,
   );
 

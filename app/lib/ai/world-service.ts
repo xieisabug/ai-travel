@@ -11,6 +11,7 @@ import type {
     TravelVehicle,
     Spot,
     SpotNPC,
+    NPCEmotion,
     GenerateWorldRequest,
     TravelSession,
     TravelSessionStatus,
@@ -476,6 +477,7 @@ export class WorldGenerationService {
             ...spotData,
             image: undefined,
             projectId: project.id,
+            npcIds: [],
             npcs: [],
             hotspots: [],
             orderInRoute: index,
@@ -490,7 +492,7 @@ export class WorldGenerationService {
         log.step(3, 5, '开始生成 NPC（并发）...');
         await this.generateSpotsNPCsAsync(spots, world);
 
-        const totalNpcs = spots.reduce((sum, s) => sum + s.npcs.length, 0);
+        const totalNpcs = spots.reduce((sum, s) => sum + (s.npcs?.length || 0), 0);
         log.info(`NPC 生成完成，共 ${totalNpcs} 个 NPC`);
 
         // 4. 更新状态为生成图片
@@ -530,14 +532,21 @@ export class WorldGenerationService {
             try {
                 log.debug(`[景点 ${index + 1}/${spots.length}] ${spot.name}: 开始生成 NPC`);
 
+                if (!spot.npcIds) {
+                    spot.npcIds = [];
+                }
+
                 // 为每个景点生成 NPC
                 const npcCount = this.config.defaultNpcPerSpot;
                 for (let i = 0; i < npcCount; i++) {
                     const result = await ai_generate.npc(spot, world, this.config.ai);
 
                     if (result.success && result.data) {
+                        if (!spot.npcs) spot.npcs = [];
+                        if (!spot.npcIds) spot.npcIds = [];
                         const npc: SpotNPC = {
                             id: generateId('npc_'),
+                            spotId: spot.id,
                             ...result.data,
                             sprite: undefined,
                             sprites: undefined,
@@ -546,12 +555,13 @@ export class WorldGenerationService {
                             generationStatus: 'generating_sprite',
                         };
                         spot.npcs.push(npc);
+                        spot.npcIds.push(npc.id);
                         log.debug(`[景点 ${index + 1}] 创建 NPC: ${npc.name} (${npc.role})`);
                     }
                 }
 
                 spot.generationStatus = 'generating_image';
-                log.info(`[景点 ${index + 1}/${spots.length}] ${spot.name}: NPC 生成完成 (${spot.npcs.length} 个)`);
+                log.info(`[景点 ${index + 1}/${spots.length}] ${spot.name}: NPC 生成完成 (${spot.npcs?.length || 0} 个)`);
             } catch (error) {
                 log.error(`[景点 ${index + 1}] ${spot.name}: NPC 生成失败`, error);
                 spot.generationStatus = 'error';
@@ -567,6 +577,7 @@ export class WorldGenerationService {
      */
     private async generateAllImagesAsync(spots: Spot[], world: World): Promise<void> {
         const allTasks: Promise<void>[] = [];
+        const emotions: NPCEmotion[] = ['neutral', 'happy', 'sad', 'surprised', 'angry', 'thinking'];
 
         for (const spot of spots) {
             // 景点图片
@@ -594,24 +605,35 @@ export class WorldGenerationService {
             );
 
             // NPC 立绘
-            for (const npc of spot.npcs) {
+            const npcList = (spot.npcs || []) as SpotNPC[];
+            for (const npc of npcList) {
                 allTasks.push(
                     (async () => {
                         try {
-                            const result = await imageGenerator.npcPortrait(
-                                {
-                                    name: npc.name,
-                                    role: npc.role,
-                                    appearance: npc.appearance,
-                                    personality: npc.personality,
-                                },
-                                'neutral',
-                                this.config.image
-                            );
+                            const portraits: Partial<Record<NPCEmotion, string>> = {};
 
-                            if (result.success && result.url) {
-                                npc.sprite = result.url;
+                            for (const emotion of emotions) {
+                                const result = await imageGenerator.npcPortrait(
+                                    {
+                                        name: npc.name,
+                                        role: npc.role,
+                                        appearance: npc.appearance,
+                                        personality: 'personality' in npc ? npc.personality : [],
+                                    },
+                                    emotion,
+                                    this.config.image,
+                                    undefined,
+                                    { worldId: world.id, spotId: spot.id },
+                                    world.visualStyle
+                                );
+
+                                if (result.success && result.url) {
+                                    portraits[emotion] = result.url;
+                                }
                             }
+
+                            npc.sprites = portraits;
+                            npc.sprite = portraits.neutral ?? npc.sprite;
                             npc.generationStatus = 'ready';
                         } catch (error) {
                             console.error(`Failed to generate portrait for NPC ${npc.name}:`, error);

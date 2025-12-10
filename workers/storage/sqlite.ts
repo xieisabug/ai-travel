@@ -35,7 +35,7 @@ let initPromise: Promise<SqlJsDatabase> | null = null;
 // ============================================
 
 /** 当前数据库 schema 版本 */
-const CURRENT_DB_VERSION = 4;
+const CURRENT_DB_VERSION = 5;
 
 /**
  * 数据库迁移定义
@@ -77,6 +77,11 @@ const migrations: Record<number, string[]> = {
     // 版本 4: 旅游项目背景音乐
     4: [
         `ALTER TABLE projects ADD COLUMN bgm_url TEXT`,
+    ],
+
+    // 版本 5: 景点存储 NPC 引用列表
+    5: [
+        `ALTER TABLE spots ADD COLUMN npc_ids TEXT`,
     ],
 };
 
@@ -360,6 +365,7 @@ function createTables(db: SqlJsDatabase): void {
             visit_tips TEXT,
             hotspots TEXT,
             entry_dialog_id TEXT,
+            npc_ids TEXT,
             suggested_duration INTEGER,
             order_in_route INTEGER,
             generation_status TEXT NOT NULL,
@@ -894,7 +900,6 @@ export class SQLiteStorageProvider implements IStorageProvider {
         if (result.length === 0 || result[0].values.length === 0) return null;
 
         const spot = this.rowToSpot(result[0].columns, result[0].values[0]);
-        spot.npcs = await this.getNPCsBySpotId(id);
         return spot;
     }
 
@@ -906,7 +911,6 @@ export class SQLiteStorageProvider implements IStorageProvider {
         const spots: Spot[] = [];
         for (const row of result[0].values) {
             const spot = this.rowToSpot(result[0].columns, row);
-            spot.npcs = await this.getNPCsBySpotId(spot.id);
             spots.push(spot);
         }
 
@@ -918,9 +922,9 @@ export class SQLiteStorageProvider implements IStorageProvider {
         db.run(`
             INSERT OR REPLACE INTO spots (
                 id, project_id, name, description, detailed_description, image,
-                story, highlights, visit_tips, hotspots, entry_dialog_id,
+                story, highlights, visit_tips, hotspots, entry_dialog_id, npc_ids,
                 suggested_duration, order_in_route, generation_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             spot.id,
             spot.projectId,
@@ -933,14 +937,19 @@ export class SQLiteStorageProvider implements IStorageProvider {
             spot.visitTips || null,
             JSON.stringify(spot.hotspots),
             spot.entryDialogId || null,
+            JSON.stringify(spot.npcIds || spot.npcs?.map(n => n.id) || []),
             spot.suggestedDuration,
             spot.orderInRoute,
             spot.generationStatus,
         ]);
 
         // 保存关联的 NPC
-        for (const npc of spot.npcs) {
-            await this.saveNPC(npc, spot.id);
+        if (spot.npcs && spot.npcs.length > 0) {
+            for (const npc of spot.npcs) {
+                if ('backstory' in npc && 'personality' in npc) {
+                    await this.saveNPC(npc as SpotNPC, spot.id);
+                }
+            }
         }
 
         saveToFile();
@@ -964,10 +973,11 @@ export class SQLiteStorageProvider implements IStorageProvider {
             visitTips: obj.visit_tips as string | undefined,
             hotspots: JSON.parse((obj.hotspots as string) || '[]'),
             entryDialogId: obj.entry_dialog_id as string | undefined,
+            npcIds: obj.npc_ids ? JSON.parse(obj.npc_ids as string) : [],
             suggestedDuration: obj.suggested_duration as number,
             orderInRoute: obj.order_in_route as number,
             generationStatus: obj.generation_status as Spot['generationStatus'],
-            npcs: [],
+            npcs: undefined,
         };
     }
 
@@ -989,8 +999,54 @@ export class SQLiteStorageProvider implements IStorageProvider {
         return result[0].values.map(row => this.rowToNPC(result[0].columns, row));
     }
 
-    async saveNPC(npc: SpotNPC, spotId: string): Promise<void> {
+    async getNPCsByIds(ids: string[]): Promise<SpotNPC[]> {
+        if (ids.length === 0) return [];
+
         const db = await this.getDb();
+        const placeholders = ids.map(() => '?').join(',');
+        const result = db.exec(`SELECT * FROM npcs WHERE id IN (${placeholders})`, ids);
+        if (result.length === 0) return [];
+
+        const rows = result[0].values.map(row => this.rowToNPC(result[0].columns, row));
+
+        // 按传入顺序排序，方便前端与引用顺序一致
+        const orderMap = new Map<string, number>();
+        ids.forEach((id, index) => orderMap.set(id, index));
+
+        return rows.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+    }
+
+    async getAllNPCs(params?: { limit?: number; offset?: number }): Promise<{ npcs: SpotNPC[]; total: number }> {
+        const db = await this.getDb();
+        const limit = params?.limit ?? 200;
+        const offset = params?.offset ?? 0;
+
+        const listResult = db.exec(`SELECT * FROM npcs ORDER BY name LIMIT ? OFFSET ?`, [limit, offset]);
+        const npcs = listResult.length === 0
+            ? []
+            : listResult[0].values.map(row => this.rowToNPC(listResult[0].columns, row));
+
+        let total = npcs.length;
+        try {
+            const countResult = db.exec(`SELECT COUNT(*) as count FROM npcs`);
+            if (countResult.length > 0 && countResult[0].values.length > 0) {
+                total = Number(countResult[0].values[0][0]) || total;
+            }
+        } catch {
+            // ignore count error, fallback to current page size
+        }
+
+        return { npcs, total };
+    }
+
+    async saveNPC(npc: SpotNPC, spotId?: string): Promise<void> {
+        const db = await this.getDb();
+        const resolvedSpotId = spotId || npc.spotId;
+
+        if (!resolvedSpotId) {
+            throw new Error('saveNPC: spotId is required');
+        }
+
         db.run(`
             INSERT OR REPLACE INTO npcs (
                 id, spot_id, name, role, description, backstory, personality,
@@ -999,7 +1055,7 @@ export class SQLiteStorageProvider implements IStorageProvider {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             npc.id,
-            spotId,
+            resolvedSpotId,
             npc.name,
             npc.role,
             npc.description,
@@ -1037,6 +1093,7 @@ export class SQLiteStorageProvider implements IStorageProvider {
             sprites: obj.sprites ? JSON.parse(obj.sprites as string) : undefined,
             greetingDialogId: obj.greeting_dialog_id as string | undefined,
             dialogOptions: obj.dialog_options ? JSON.parse(obj.dialog_options as string) : undefined,
+            spotId: obj.spot_id as string,
             generationStatus: obj.generation_status as SpotNPC['generationStatus'],
         };
     }
