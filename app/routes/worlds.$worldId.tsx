@@ -2,6 +2,20 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AuthModal } from '~/components/AuthModal';
 import { DailyRewardToast } from '~/components/DailyRewardToast';
+import {
+  CardStack,
+  FeatureGrid,
+  FloatingParticles,
+  GlowButton,
+  HighlightText,
+  ImageCard,
+  ImageBadge,
+  LoadingScreen,
+  ErrorScreen,
+  PageBackground,
+  ProjectCarousel,
+  SectionHeader,
+} from '~/components/ui';
 import { useAuthContext } from '~/hooks/useAuth';
 import { useWorlds } from '~/hooks/useWorlds';
 import { USER_ROLE_NAMES, type LoginResponse } from '~/types/user';
@@ -108,59 +122,36 @@ export default function WorldDetailPage() {
 
   // Loading state
   if (isLoading && !currentWorld) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center">
-        <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(139,92,246,0.15),transparent)] pointer-events-none" />
-        <div className="text-center relative z-10">
-          <div className="w-16 h-16 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mx-auto mb-6" />
-          <p className="text-amber-100/70 text-lg tracking-wider">探索世界中...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="探索世界中..." />;
   }
 
   // Not found state
   if (!currentWorld) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center p-8">
-        <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(139,92,246,0.15),transparent)] pointer-events-none" />
-        <div className="text-center relative z-10 space-y-6">
-          <div className="text-3xl font-bold text-amber-100">世界已消失在迷雾中...</div>
-          {error && <div className="text-red-400 text-sm">{error}</div>}
-          <button
-            className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-6 py-3 rounded-full font-medium cursor-pointer transition-all hover:shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:-translate-y-0.5"
-            onClick={handleBack}
-          >
-            ← 返回世界列表
-          </button>
-        </div>
-      </div>
+      <ErrorScreen
+        title="世界已消失在迷雾中..."
+        message={error || undefined}
+        actionText="← 返回世界列表"
+        onAction={handleBack}
+      />
     );
   }
 
   // Preparing state
   if (viewState === 'preparing') {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center p-8">
-        <div className="fixed inset-0">
-          {currentWorld.imageUrl && (
-            <img
-              src={currentWorld.imageUrl}
-              alt=""
-              className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm"
-            />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/80 to-transparent" />
-        </div>
-        <div className="text-center relative z-10">
-          <div className="w-20 h-20 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mx-auto mb-8" />
-          <h2 className="text-3xl font-bold mb-4 text-amber-100">{preparingMessage}</h2>
-          <div className="mt-8 p-8 bg-black/40 backdrop-blur-xl rounded-2xl border border-amber-500/20 max-w-md mx-auto">
-            <h3 className="text-amber-400 font-semibold text-xl mb-3">{currentWorld.name}</h3>
-            <p className="text-white/60 text-sm leading-relaxed">{currentWorld.description}</p>
+      <PageBackground backgroundImage={currentWorld.imageUrl}>
+        <div className="min-h-screen flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="w-20 h-20 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mx-auto mb-8" />
+            <h2 className="text-3xl font-bold mb-4 text-amber-100">{preparingMessage}</h2>
+            <div className="mt-8 p-8 bg-black/40 backdrop-blur-xl rounded-2xl border border-amber-500/20 max-w-md mx-auto">
+              <h3 className="text-amber-400 font-semibold text-xl mb-3">{currentWorld.name}</h3>
+              <p className="text-white/60 text-sm leading-relaxed">{currentWorld.description}</p>
+            </div>
           </div>
         </div>
-      </div>
+      </PageBackground>
     );
   }
 
@@ -170,6 +161,14 @@ export default function WorldDetailPage() {
     ...(currentWorld.cultureImages || []),
   ].filter(Boolean);
 
+  // Build feature cards data
+  const featureCards = [
+    currentWorld.geography && { icon: '🏔️', label: '地理', content: currentWorld.geography, theme: 'amber' as const },
+    currentWorld.climate && { icon: '🌤️', label: '气候', content: currentWorld.climate, theme: 'cyan' as const },
+    currentWorld.culture && { icon: '🎭', label: '文化', content: currentWorld.culture, theme: 'purple' as const },
+    currentWorld.cuisine && { icon: '🍜', label: '美食', content: currentWorld.cuisine, theme: 'orange' as const },
+  ].filter(Boolean) as Array<{ icon: string; label: string; content: string; theme: 'amber' | 'cyan' | 'purple' | 'orange' }>;
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
       {/* ============================================
@@ -177,7 +176,7 @@ export default function WorldDetailPage() {
           ============================================ */}
       <section ref={heroRef} className="relative h-screen overflow-hidden">
         {/* Background Image with Parallax */}
-        <div 
+        <div
           className="absolute inset-0 scale-110"
           style={{ transform: `translateY(${scrollY * 0.3}px) scale(1.1)` }}
         >
@@ -198,31 +197,15 @@ export default function WorldDetailPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_20%,transparent,rgba(10,10,15,0.8))]" />
 
         {/* Floating Particles Effect */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-amber-400/40 rounded-full animate-twinkle"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 3}s`,
-                animationDuration: `${2 + Math.random() * 2}s`,
-              }}
-            />
-          ))}
-        </div>
+        <FloatingParticles count={20} color="amber" />
 
         {/* Top Navigation Bar */}
         <nav className="absolute top-0 left-0 right-0 z-50 p-6">
           <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <button
-              className="group flex items-center gap-2 bg-black/30 backdrop-blur-md border border-white/10 text-white px-5 py-2.5 rounded-full transition-all hover:bg-black/50 hover:border-amber-500/30"
-              onClick={handleBack}
-            >
+            <GlowButton variant="ghost" size="sm" theme="amber" onClick={handleBack}>
               <span className="transform group-hover:-translate-x-1 transition-transform">←</span>
               <span className="text-sm">返回世界列表</span>
-            </button>
+            </GlowButton>
             {error && (
               <div
                 className="bg-red-500/20 backdrop-blur-md border border-red-500/50 text-red-300 px-4 py-2 rounded-full text-sm cursor-pointer"
@@ -272,26 +255,15 @@ export default function WorldDetailPage() {
 
             {/* CTA Button */}
             <div className="animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
-              <button
-                className="group relative bg-gradient-to-r from-amber-500 to-orange-500 text-white px-10 py-4 rounded-full text-lg font-semibold transition-all hover:shadow-[0_0_50px_rgba(245,158,11,0.5)] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+              <GlowButton
+                size="lg"
+                theme="amber"
+                icon="🚀"
+                loading={isGenerating}
                 onClick={handleStartTravel}
-                disabled={isGenerating}
               >
-                <span className="relative z-10 flex items-center gap-3">
-                  {isGenerating ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      准备中...
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-2xl">🚀</span>
-                      开始探索
-                    </>
-                  )}
-                </span>
-                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 opacity-0 group-hover:opacity-100 blur-xl transition-opacity" />
-              </button>
+                {isGenerating ? '准备中...' : '开始探索'}
+              </GlowButton>
             </div>
           </div>
         </div>
@@ -325,98 +297,30 @@ export default function WorldDetailPage() {
               {/* Text Content */}
               <div className="space-y-8">
                 <div>
-                  <p className="text-amber-400/80 text-sm font-medium tracking-[0.25em] uppercase mb-4">
-                    世界概况
-                  </p>
-                  <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
-                    这是一个怎样的
-                    <span className="text-amber-400">世界</span>？
-                  </h2>
+                  <SectionHeader
+                    label="世界概况"
+                    title={<>这是一个怎样的<HighlightText>世界</HighlightText>？</>}
+                    theme="amber"
+                    className="mb-6"
+                  />
                   <p className="text-white/60 text-lg leading-relaxed">
                     {currentWorld.detailedDescription || currentWorld.description}
                   </p>
                 </div>
 
                 {/* Feature List */}
-                <div className="grid grid-cols-2 gap-4">
-                  {currentWorld.geography && (
-                    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
-                      <div className="text-amber-400 text-2xl mb-2">🏔️</div>
-                      <div className="text-white/40 text-xs uppercase tracking-wide mb-1">地理</div>
-                      <div className="text-white/80 text-sm line-clamp-2">{currentWorld.geography}</div>
-                    </div>
-                  )}
-                  {currentWorld.climate && (
-                    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
-                      <div className="text-cyan-400 text-2xl mb-2">🌤️</div>
-                      <div className="text-white/40 text-xs uppercase tracking-wide mb-1">气候</div>
-                      <div className="text-white/80 text-sm line-clamp-2">{currentWorld.climate}</div>
-                    </div>
-                  )}
-                  {currentWorld.culture && (
-                    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
-                      <div className="text-purple-400 text-2xl mb-2">🎭</div>
-                      <div className="text-white/40 text-xs uppercase tracking-wide mb-1">文化</div>
-                      <div className="text-white/80 text-sm line-clamp-2">{currentWorld.culture}</div>
-                    </div>
-                  )}
-                  {currentWorld.cuisine && (
-                    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
-                      <div className="text-orange-400 text-2xl mb-2">🍜</div>
-                      <div className="text-white/40 text-xs uppercase tracking-wide mb-1">美食</div>
-                      <div className="text-white/80 text-sm line-clamp-2">{currentWorld.cuisine}</div>
-                    </div>
-                  )}
-                </div>
+                {featureCards.length > 0 && (
+                  <FeatureGrid features={featureCards} columns={2} />
+                )}
               </div>
 
               {/* Card Stack Image Gallery */}
-              <div className="relative">
-                <div className="relative h-[500px] flex items-center justify-center">
-                  {/* Decorative Cards (Background) */}
-                  {allGalleryImages.length > 2 && (
-                    <div 
-                      className="absolute w-72 h-96 rounded-2xl overflow-hidden border border-white/10 shadow-2xl transform rotate-6 translate-x-12 -translate-y-4 opacity-60"
-                    >
-                      <img 
-                        src={allGalleryImages[2]} 
-                        alt="" 
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/40" />
-                    </div>
-                  )}
-                  {allGalleryImages.length > 1 && (
-                    <div 
-                      className="absolute w-72 h-96 rounded-2xl overflow-hidden border border-white/10 shadow-2xl transform -rotate-3 translate-x-6 translate-y-2 opacity-80"
-                    >
-                      <img 
-                        src={allGalleryImages[1]} 
-                        alt="" 
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/20" />
-                    </div>
-                  )}
-                  {/* Main Card */}
-                  <div 
-                    className="relative w-80 h-[420px] rounded-2xl overflow-hidden border border-amber-500/20 shadow-[0_30px_60px_rgba(0,0,0,0.5)] transform hover:scale-105 transition-transform duration-500 cursor-pointer"
-                  >
-                    <img 
-                      src={allGalleryImages[0] || currentWorld.imageUrl} 
-                      alt={currentWorld.name} 
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-6">
-                      <div className="text-amber-400 text-xs font-medium tracking-wider uppercase mb-2">
-                        {currentWorld.era || '神秘纪元'}
-                      </div>
-                      <div className="text-white font-bold text-lg">{currentWorld.name}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <CardStack
+                images={allGalleryImages}
+                fallbackImage={currentWorld.imageUrl}
+                title={currentWorld.name}
+                subtitle={currentWorld.era || '神秘纪元'}
+              />
             </div>
           </div>
         </section>
@@ -429,52 +333,39 @@ export default function WorldDetailPage() {
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-amber-500/[0.02] to-transparent pointer-events-none" />
 
             <div className="max-w-7xl mx-auto px-6">
-              <div className="text-center mb-16">
-                <p className="text-amber-400/80 text-sm font-medium tracking-[0.25em] uppercase mb-4">
-                  画廊
-                </p>
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                  世界
-                  <span className="text-amber-400">掠影</span>
-                </h2>
-                <p className="text-white/50 text-lg max-w-2xl mx-auto">
-                  探索这个世界的地貌风光与人文风情
-                </p>
-              </div>
+              <SectionHeader
+                label="画廊"
+                title={<>世界<HighlightText>掠影</HighlightText></>}
+                description="探索这个世界的地貌风光与人文风情"
+                theme="amber"
+                align="center"
+                className="mb-16"
+              />
 
               {/* Masonry Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {/* Large Featured Image */}
                 {allGalleryImages[0] && (
-                  <div className="col-span-2 row-span-2 group">
-                    <div className="relative h-full min-h-[400px] rounded-2xl overflow-hidden border border-white/10 transition-all duration-500 hover:border-amber-500/30 hover:shadow-[0_20px_60px_rgba(245,158,11,0.15)]">
-                      <img 
-                        src={allGalleryImages[0]} 
-                        alt="Gallery 1" 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <div className="absolute bottom-4 left-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-4 group-hover:translate-y-0">
-                        <span className="px-3 py-1.5 bg-amber-500/80 backdrop-blur-sm rounded-full text-white text-xs font-medium">
-                          🌍 地貌风光
-                        </span>
-                      </div>
-                    </div>
+                  <div className="col-span-2 row-span-2">
+                    <ImageCard
+                      src={allGalleryImages[0]}
+                      alt="Gallery 1"
+                      size="featured"
+                      theme="amber"
+                      badge={<ImageBadge icon="🌍" text="地貌风光" theme="amber" />}
+                    />
                   </div>
                 )}
 
                 {/* Smaller Images */}
                 {allGalleryImages.slice(1, 5).map((img, idx) => (
-                  <div key={idx} className="group">
-                    <div className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 transition-all duration-500 hover:border-amber-500/30 hover:shadow-[0_20px_60px_rgba(245,158,11,0.15)]">
-                      <img 
-                        src={img} 
-                        alt={`Gallery ${idx + 2}`} 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    </div>
-                  </div>
+                  <ImageCard
+                    key={idx}
+                    src={img}
+                    alt={`Gallery ${idx + 2}`}
+                    size="sm"
+                    theme="amber"
+                  />
                 ))}
               </div>
             </div>
@@ -560,18 +451,12 @@ export default function WorldDetailPage() {
 
           <div className="max-w-7xl mx-auto px-6">
             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12">
-              <div>
-                <p className="text-cyan-400/80 text-sm font-medium tracking-[0.25em] uppercase mb-4">
-                  探索行程
-                </p>
-                <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-                  精彩
-                  <span className="text-cyan-400">旅程</span>
-                </h2>
-                <p className="text-white/50 text-lg">
-                  本次旅行包含 {projects.length} 个精彩项目
-                </p>
-              </div>
+              <SectionHeader
+                label="探索行程"
+                title={<>精彩<HighlightText theme="cyan">旅程</HighlightText></>}
+                description={`本次旅行包含 ${projects.length} 个精彩项目`}
+                theme="cyan"
+              />
 
               {/* Navigation Hint */}
               <div className="flex items-center gap-2 text-white/40 text-sm">
@@ -580,69 +465,7 @@ export default function WorldDetailPage() {
             </div>
 
             {/* Horizontal Scroll Cards */}
-            <div className="flex gap-6 overflow-x-auto pb-6 snap-x snap-mandatory scrollbar-hide -mx-6 px-6">
-              {projects.map((project, index) => (
-                <div
-                  key={project.id}
-                  className="group relative flex-shrink-0 w-[320px] md:w-[380px] snap-center"
-                >
-                  <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/10 transition-all duration-500 hover:border-cyan-500/30 hover:shadow-[0_30px_60px_rgba(6,182,212,0.15)] hover:-translate-y-2">
-                    {/* Project Image */}
-                    <div className="relative aspect-[4/3] overflow-hidden">
-                      {project.coverImage ? (
-                        <img
-                          src={project.coverImage}
-                          alt={project.name}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#2a2a4a] to-[#1a1a3a]">
-                          <span className="text-6xl">🗺️</span>
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/20 to-transparent" />
-
-                      {/* Index Badge */}
-                      <div className="absolute top-4 left-4 w-10 h-10 rounded-full bg-cyan-500 text-white font-bold flex items-center justify-center shadow-lg shadow-cyan-500/30">
-                        {index + 1}
-                      </div>
-
-                      {/* Difficulty Badge */}
-                      <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 backdrop-blur-sm rounded-full text-xs text-white/80">
-                        难度 {'★'.repeat(project.difficulty)}
-                      </div>
-                    </div>
-
-                    {/* Project Info */}
-                    <div className="relative p-6">
-                      <h4 className="text-white font-bold text-xl mb-2 line-clamp-1 group-hover:text-cyan-400 transition-colors">
-                        {project.name}
-                      </h4>
-                      <p className="text-white/50 text-sm leading-relaxed line-clamp-2 mb-4">
-                        {project.description}
-                      </p>
-
-                      {/* Tags */}
-                      {project.tags && project.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {project.tags.slice(0, 3).map((tag, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-1 bg-white/5 border border-white/10 rounded-md text-xs text-white/60"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Hover Glow Effect */}
-                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-t from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ProjectCarousel projects={projects} theme="cyan" />
           </div>
         </section>
 
@@ -667,7 +490,7 @@ export default function WorldDetailPage() {
 
           <div className="relative z-10 max-w-3xl mx-auto px-6 text-center">
             <h2 className="text-4xl md:text-6xl font-bold mb-6">
-              <span className="text-amber-400">准备</span>
+              <HighlightText>准备</HighlightText>
               <span className="text-white">启程</span>
             </h2>
 
@@ -691,38 +514,27 @@ export default function WorldDetailPage() {
 
                 {/* Start Button */}
                 <div>
-                  <button
-                    className="group relative bg-gradient-to-r from-amber-500 to-orange-500 text-white px-12 py-5 rounded-full text-xl font-bold transition-all hover:shadow-[0_0_60px_rgba(245,158,11,0.5)] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  <GlowButton
+                    size="xl"
+                    theme="amber"
+                    icon="🚀"
+                    loading={isGenerating}
                     onClick={handleStartTravel}
-                    disabled={isGenerating}
                   >
-                    <span className="relative z-10 flex items-center gap-3">
-                      {isGenerating ? (
-                        <>
-                          <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-                          准备中...
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-2xl">🚀</span>
-                          立即启程
-                        </>
-                      )}
-                    </span>
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 opacity-0 group-hover:opacity-100 blur-2xl transition-opacity pointer-events-none" />
-                  </button>
+                    {isGenerating ? '准备中...' : '立即启程'}
+                  </GlowButton>
                 </div>
               </div>
             ) : (
               <div className="space-y-6">
                 <p className="text-white/40">登录后即可开始旅行</p>
-                <button
-                  className="group relative bg-gradient-to-r from-cyan-500 to-blue-500 text-white px-10 py-4 rounded-full text-lg font-semibold transition-all hover:shadow-[0_0_50px_rgba(6,182,212,0.4)] hover:-translate-y-1"
+                <GlowButton
+                  size="lg"
+                  theme="cyan"
                   onClick={() => openAuthModal('login')}
                 >
-                  <span className="relative z-10">登录 / 注册</span>
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-400 to-blue-400 opacity-0 group-hover:opacity-100 blur-xl transition-opacity pointer-events-none" />
-                </button>
+                  登录 / 注册
+                </GlowButton>
               </div>
             )}
           </div>
