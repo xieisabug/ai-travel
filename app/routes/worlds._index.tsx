@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthModal, UserInfo } from '~/components/AuthModal';
-import { CurrencyDisplay } from '~/components/CurrencyDisplay';
-import { DailyRewardToast } from '~/components/DailyRewardToast';
-import { useWorlds } from '~/hooks/useWorlds';
-import { useAuthContext, canGenerateWorld, getRemainingWorldGenerations } from '~/hooks/useAuth';
+import { AuthModal, UserInfo } from '~/components/auth-modal';
+import { CurrencyDisplay } from '~/components/currency-display';
+import { DailyRewardToast } from '~/components/daily-reward-toast';
+import { useWorlds } from '~/hooks/use-worlds';
+import { useAuthContext, canGenerateWorld, getRemainingWorldGenerations } from '~/hooks/use-auth';
 import type { LoginResponse } from '~/types/user';
 
 export default function WorldsIndexPage() {

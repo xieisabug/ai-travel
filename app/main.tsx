@@ -15,7 +15,7 @@ import AdminWorlds from './routes/admin/worlds';
 import Profile from './routes/profile';
 
 // 认证 Provider
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider } from './hooks/use-auth';
 
 function App() {
     return (

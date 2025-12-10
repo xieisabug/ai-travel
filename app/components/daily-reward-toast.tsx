@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { formatCurrency } from '~/hooks/useCurrency';
+import { formatCurrency } from '~/hooks/use-currency';
 import { CURRENCY_NAME } from '~/types/currency';
 
 interface DailyRewardToastProps {

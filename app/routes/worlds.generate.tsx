@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthModal } from '~/components/AuthModal';
-import { DailyRewardToast } from '~/components/DailyRewardToast';
-import { useWorlds } from '~/hooks/useWorlds';
-import { useAuthContext, canGenerateWorld, getRemainingWorldGenerations } from '~/hooks/useAuth';
+import { AuthModal } from '~/components/auth-modal';
+import { DailyRewardToast } from '~/components/daily-reward-toast';
+import { useWorlds } from '~/hooks/use-worlds';
+import { useAuthContext, canGenerateWorld, getRemainingWorldGenerations } from '~/hooks/use-auth';
 import type { LoginResponse } from '~/types/user';
 
 const generationSteps = [

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useCurrency, formatCurrency, formatCurrencyChange } from '~/hooks/useCurrency';
+import { useCurrency, formatCurrencyChange } from '~/hooks/use-currency';
 import type { CurrencyTransaction, CurrencyTransactionType } from '~/types/currency';
 import { TRANSACTION_TYPE_NAMES } from '~/types/currency';
 

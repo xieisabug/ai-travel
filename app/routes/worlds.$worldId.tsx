@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AuthModal } from '~/components/AuthModal';
-import { DailyRewardToast } from '~/components/DailyRewardToast';
+import { AuthModal } from '~/components/auth-modal';
+import { DailyRewardToast } from '~/components/daily-reward-toast';
 import {
   CardStack,
   FeatureGrid,
@@ -16,8 +16,8 @@ import {
   ProjectCarousel,
   SectionHeader,
 } from '~/components/ui';
-import { useAuthContext } from '~/hooks/useAuth';
-import { useWorlds } from '~/hooks/useWorlds';
+import { useAuthContext } from '~/hooks/use-auth';
+import { useWorlds } from '~/hooks/use-worlds';
 import { USER_ROLE_NAMES, type LoginResponse } from '~/types/user';
 
 type ViewState = 'detail' | 'preparing';

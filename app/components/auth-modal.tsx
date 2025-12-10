@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuthContext } from '~/hooks/useAuth';
+import { useAuthContext } from '~/hooks/use-auth';
 import { USER_ROLE_NAMES, type LoginResponse } from '~/types/user';
 
 interface AuthModalProps {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthContext } from '~/hooks/useAuth';
+import { useAuthContext } from '~/hooks/use-auth';
 import type { World, TravelVehicle, TravelProject, Spot, SpotNPC, DialogScript, DialogScriptType, DialogLine } from '~/types/world';
 import {
     buildWorldCoverPrompt,

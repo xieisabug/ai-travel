@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useCurrency, formatCurrency } from '~/hooks/useCurrency';
-import { useAuthContext } from '~/hooks/useAuth';
+import { useCurrency, formatCurrency } from '~/hooks/use-currency';
+import { useAuthContext } from '~/hooks/use-auth';
 import { CURRENCY_NAME } from '~/types/currency';
 
 interface CurrencyDisplayProps {

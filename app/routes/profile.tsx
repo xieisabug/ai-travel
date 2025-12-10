@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuthContext } from '~/hooks/useAuth';
-import { useCurrency, formatCurrency } from '~/hooks/useCurrency';
-import { CurrencyTransactionList } from '~/components/CurrencyTransactionList';
-import { CurrencyDisplay } from '~/components/CurrencyDisplay';
-import { UserInfo } from '~/components/AuthModal';
+import { useAuthContext } from '~/hooks/use-auth';
+import { useCurrency, formatCurrency } from '~/hooks/use-currency';
+import { CurrencyTransactionList } from '~/components/currency-transaction-list';
+import { CurrencyDisplay } from '~/components/currency-display';
+import { UserInfo } from '~/components/auth-modal';
 import { authApi, ApiError } from '~/lib/api';
 import { USER_ROLE_NAMES } from '~/types/user';
 import { CURRENCY_NAME } from '~/types/currency';

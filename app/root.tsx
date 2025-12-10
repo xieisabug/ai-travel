@@ -10,7 +10,7 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
-import { AuthProvider } from "~/hooks/useAuth";
+import { AuthProvider } from "~/hooks/use-auth";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
