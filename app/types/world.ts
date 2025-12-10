@@ -80,6 +80,10 @@ export interface World {
     /** 可用的旅游项目 */
     travelProjects: TravelProject[];
 
+    // === NPC 系统 ===
+    /** 世界级 NPC 列表（独立于景点） */
+    npcs?: SpotNPC[];
+
     // === 视觉 ===
     /** 世界主图 URL */
     imageUrl?: string;
@@ -326,12 +330,15 @@ export interface SpotHotspot {
 // ============================================
 
 /**
- * 景点 NPC
+ * NPC（独立实体，属于世界级别）
+ * NPC 不再强制绑定到特定景点，而是归属于世界
  */
 export interface SpotNPC {
     /** NPC 唯一标识 */
     id: string;
-    /** 所属景点 ID（持久化/引用用） */
+    /** 所属世界 ID（NPC 是世界级别的实体） */
+    worldId: string;
+    /** 所属景点 ID（可选，兼容旧数据） */
     spotId?: string;
     /** NPC 名称 */
     name: string;
@@ -372,6 +379,22 @@ export interface SpotNPC {
     // === 元数据 ===
     /** 生成状态 */
     generationStatus: NPCGenerationStatus;
+}
+
+/**
+ * 景点对话（引用 NPC 产生对话）
+ */
+export interface SpotDialog {
+    /** 对话唯一标识 */
+    id: string;
+    /** 引用的 NPC ID */
+    npcId: string;
+    /** 对话内容 */
+    content: string;
+    /** NPC 情绪 */
+    emotion: NPCEmotion;
+    /** 对话顺序 */
+    order: number;
 }
 
 /**
@@ -468,7 +491,9 @@ export type NPCGenerationStatus =
 export interface NPCPublicProfile {
     /** NPC 唯一标识 */
     id: string;
-    /** 所属景点 ID（便于按景点查询/引用） */
+    /** 所属世界 ID */
+    worldId: string;
+    /** 所属景点 ID（可选，兼容旧数据） */
     spotId?: string;
     /** NPC 名称 */
     name: string;
@@ -492,6 +517,7 @@ export interface NPCPublicProfile {
 export function toNPCPublicProfile(npc: SpotNPC): NPCPublicProfile {
     return {
         id: npc.id,
+        worldId: npc.worldId,
         name: npc.name,
         role: npc.role,
         description: npc.description,

@@ -271,31 +271,6 @@ export default function AdminWorlds() {
         });
     };
 
-    // 更新 NPC 字段
-    const updateNpcField = (projectId: string, spotId: string, npcId: string, field: keyof SpotNPC, value: any) => {
-        if (!selectedWorld) return;
-        setSelectedWorld({
-            ...selectedWorld,
-            travelProjects: selectedWorld.travelProjects.map(p =>
-                p.id === projectId
-                    ? {
-                        ...p,
-                        spots: p.spots.map(s =>
-                            s.id === spotId
-                                ? {
-                                    ...s,
-                                    npcs: (s.npcs || []).map(n =>
-                                        n.id === npcId ? { ...n, [field]: value } : n
-                                    ),
-                                }
-                                : s
-                        ),
-                    }
-                    : p
-            ),
-        });
-    };
-
     // 如果正在检查权限
     if (authLoading) {
         return (
@@ -338,12 +313,6 @@ export default function AdminWorlds() {
                         )}
                     </div>
                     <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => navigate('/admin/npcs')}
-                            className="px-4 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-sm font-medium text-white/80"
-                        >
-                            NPC 管理
-                        </button>
                         {editState.mode === 'world' && (
                             <button
                                 onClick={handleSaveWorld}
@@ -400,7 +369,6 @@ export default function AdminWorlds() {
                         onUpdateVehicle={updateVehicleField}
                         onUpdateProject={updateProjectField}
                         onUpdateSpot={updateSpotField}
-                        onUpdateNpc={updateNpcField}
                     />
                 ) : null}
             </main>
@@ -506,7 +474,6 @@ interface WorldEditorProps {
     onUpdateVehicle: (field: keyof TravelVehicle, value: any) => void;
     onUpdateProject: (projectId: string, field: keyof TravelProject, value: any) => void;
     onUpdateSpot: (projectId: string, spotId: string, field: keyof Spot, value: any) => void;
-    onUpdateNpc: (projectId: string, spotId: string, npcId: string, field: keyof SpotNPC, value: any) => void;
 }
 
 function WorldEditor({
@@ -515,7 +482,6 @@ function WorldEditor({
     onUpdateVehicle,
     onUpdateProject,
     onUpdateSpot,
-    onUpdateNpc,
 }: WorldEditorProps) {
     const [activeSection, setActiveSection] = useState<string>('basic');
     const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
@@ -548,6 +514,7 @@ function WorldEditor({
     const sections = [
         { id: 'basic', label: '基础信息' },
         { id: 'details', label: '风土人情' },
+        { id: 'npcs', label: 'NPC 管理' },
         { id: 'vehicle', label: '旅行器' },
         { id: 'projects', label: '旅游项目' },
     ];
@@ -955,6 +922,15 @@ function WorldEditor({
                     </FormSection>
                 )}
 
+                {/* NPC 管理 */}
+                {activeSection === 'npcs' && (
+                    <NPCSection
+                        worldId={world.id}
+                        npcs={world.npcs || []}
+                        onNPCsChange={(npcs) => onUpdateWorld('npcs', npcs)}
+                    />
+                )}
+
                 {/* 旅行器 */}
                 {activeSection === 'vehicle' && world.travelVehicle && (
                     <FormSection title="旅行器">
@@ -1225,8 +1201,8 @@ function WorldEditor({
                                                                     spot={spot}
                                                                     worldName={world.name}
                                                                     spotId={spot.id}
+                                                                    worldNpcs={world.npcs || []}
                                                                     onUpdate={(field, value) => onUpdateSpot(project.id, spot.id, field, value)}
-                                                                    onUpdateNpc={(npcId, field, value) => onUpdateNpc(project.id, spot.id, npcId, field, value)}
                                                                 />
                                                             </div>
                                                         )}
@@ -1253,12 +1229,18 @@ interface SpotEditorProps {
     spot: Spot;
     worldName: string;
     spotId: string;
+    worldNpcs: SpotNPC[];  // 世界级 NPC 列表，用于下拉选择
     onUpdate: (field: keyof Spot, value: any) => void;
-    onUpdateNpc: (npcId: string, field: keyof SpotNPC, value: any) => void;
 }
 
-function SpotEditor({ spot, worldName, spotId, onUpdate, onUpdateNpc }: SpotEditorProps) {
+function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditorProps) {
     const [expandedNpcs, setExpandedNpcs] = useState<Set<string>>(new Set());
+    const [selectedNpcToAdd, setSelectedNpcToAdd] = useState<string>('');
+
+    // 获取景点已关联的 NPC
+    const linkedNpcIds = spot.npcIds || [];
+    const linkedNpcs = worldNpcs.filter(npc => linkedNpcIds.includes(npc.id));
+    const availableNpcs = worldNpcs.filter(npc => !linkedNpcIds.includes(npc.id));
 
     const toggleNpc = (npcId: string) => {
         setExpandedNpcs(prev => {
@@ -1270,6 +1252,18 @@ function SpotEditor({ spot, worldName, spotId, onUpdate, onUpdateNpc }: SpotEdit
             }
             return next;
         });
+    };
+
+    const handleAddNpc = () => {
+        if (!selectedNpcToAdd) return;
+        const newNpcIds = [...linkedNpcIds, selectedNpcToAdd];
+        onUpdate('npcIds', newNpcIds);
+        setSelectedNpcToAdd('');
+    };
+
+    const handleRemoveNpc = (npcIdToRemove: string) => {
+        const newNpcIds = linkedNpcIds.filter(id => id !== npcIdToRemove);
+        onUpdate('npcIds', newNpcIds);
     };
 
     return (
@@ -1355,49 +1349,91 @@ function SpotEditor({ spot, worldName, spotId, onUpdate, onUpdateNpc }: SpotEdit
                 </FormField>
             </div>
 
-            {/* NPC 列表 */}
-            { (() => {
-                const npcList = (spot.npcs || []).filter((npc): npc is SpotNPC => 'backstory' in npc);
-                return npcList.length > 0 ? (
-                <div className="pt-4 border-t border-white/10">
-                    <h5 className="text-sm font-medium mb-3 text-white/80">NPC ({npcList.length})</h5>
+            {/* NPC 关联管理 */}
+            <div className="pt-4 border-t border-white/10">
+                <h5 className="text-sm font-medium mb-3 text-white/80">关联 NPC ({linkedNpcs.length})</h5>
+                
+                {/* 添加 NPC 下拉选择 */}
+                {availableNpcs.length > 0 && (
+                    <div className="flex gap-2 mb-4">
+                        <select
+                            value={selectedNpcToAdd}
+                            onChange={(e) => setSelectedNpcToAdd(e.target.value)}
+                            className="form-input flex-1"
+                        >
+                            <option value="">选择要关联的 NPC...</option>
+                            {availableNpcs.map(npc => (
+                                <option key={npc.id} value={npc.id}>
+                                    {npc.name} - {npc.role}
+                                </option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={handleAddNpc}
+                            disabled={!selectedNpcToAdd}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+                        >
+                            添加
+                        </button>
+                    </div>
+                )}
+
+                {worldNpcs.length === 0 && (
+                    <p className="text-white/40 text-sm italic">该世界还没有创建 NPC，请先在「NPC 管理」中添加</p>
+                )}
+
+                {/* 已关联的 NPC 列表 */}
+                {linkedNpcs.length > 0 ? (
                     <div className="space-y-2">
-                        {npcList.map(npc => (
+                        {linkedNpcs.map(npc => (
                             <div key={npc.id} className="border border-white/10 rounded-lg overflow-hidden">
                                 <button
                                     onClick={() => toggleNpc(npc.id)}
                                     className="w-full px-3 py-2 bg-white/5 flex items-center justify-between hover:bg-white/10 transition-colors text-sm"
                                 >
-                                    <span>{npc.name} - {npc.role}</span>
-                                    <svg
-                                        className={`w-4 h-4 text-white/40 transition-transform ${
-                                            expandedNpcs.has(npc.id) ? 'rotate-180' : ''
-                                        }`}
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
+                                    <div className="flex items-center gap-2">
+                                        {npc.sprite && (
+                                            <img src={npc.sprite} alt={npc.name} className="w-8 h-8 rounded-full object-cover" />
+                                        )}
+                                        <span>{npc.name} - {npc.role}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            onClick={(e) => { e.stopPropagation(); handleRemoveNpc(npc.id); }}
+                                            className="text-red-400 hover:text-red-300 cursor-pointer text-xs"
+                                        >
+                                            移除
+                                        </span>
+                                        <svg
+                                            className={`w-4 h-4 text-white/40 transition-transform ${
+                                                expandedNpcs.has(npc.id) ? 'rotate-180' : ''
+                                            }`}
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </div>
                                 </button>
 
                                 {expandedNpcs.has(npc.id) && (
                                     <div className="p-3 space-y-3 border-t border-white/10">
-                                        <NpcEditor
+                                        <SpotNpcDialogEditor
                                             npc={npc}
-                                                                worldName={worldName}
-                                                                spotName={spot.name}
                                             spotId={spot.id}
-                                            onUpdate={(field, value) => onUpdateNpc(npc.id, field, value)}
+                                            worldName={worldName}
+                                            spotName={spot.name}
                                         />
                                     </div>
                                 )}
                             </div>
                         ))}
                     </div>
-                </div>
-                ) : null;
-            })()}
+                ) : (
+                    worldNpcs.length > 0 && <p className="text-white/40 text-sm">尚未关联任何 NPC</p>
+                )}
+            </div>
         </>
     );
 }
@@ -1714,6 +1750,254 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
 }
 
 // ============================================
+// 景点 NPC 对话编辑器组件（仅管理对话，不编辑 NPC 属性）
+// ============================================
+
+interface SpotNpcDialogEditorProps {
+    npc: SpotNPC;
+    spotId: string;
+    worldName: string;
+    spotName: string;
+}
+
+function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialogEditorProps) {
+    const dialogTypes: Array<{ type: DialogScriptType; label: string }> = [
+        { type: 'entry', label: '入场对话 (entry)' },
+        { type: 'chat', label: '闲聊对话 (chat)' },
+    ];
+
+    const emptyScripts: Record<DialogScriptType, DialogScript | null> = {
+        entry: null,
+        chat: null,
+        quest: null,
+        shop: null,
+        farewell: null,
+    };
+
+    const [dialogScripts, setDialogScripts] = useState<Record<DialogScriptType, DialogScript | null>>(emptyScripts);
+    const [loadingDialogs, setLoadingDialogs] = useState(false);
+    const [savingType, setSavingType] = useState<DialogScriptType | null>(null);
+
+    const loadDialogScripts = async () => {
+        try {
+            setLoadingDialogs(true);
+            // 加载该 NPC 在当前景点的对话脚本
+            const res = await fetch(`/api/admin/dialog-scripts?npcId=${npc.id}&spotId=${spotId}`);
+            const data = await res.json();
+            if (data.success && data.scripts) {
+                const next: Record<DialogScriptType, DialogScript | null> = { ...emptyScripts };
+                for (const script of data.scripts as DialogScript[]) {
+                    next[script.type] = script;
+                }
+                setDialogScripts(next);
+            }
+        } finally {
+            setLoadingDialogs(false);
+        }
+    };
+
+    useEffect(() => {
+        loadDialogScripts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [npc.id, spotId]);
+
+    const updateScriptState = (type: DialogScriptType, updater: (prev: DialogScript | null) => DialogScript | null) => {
+        setDialogScripts(prev => ({ ...prev, [type]: updater(prev[type]) }));
+    };
+
+    const handleLineChange = (type: DialogScriptType, index: number, field: keyof DialogLine, value: string) => {
+        updateScriptState(type, (prev) => {
+            const base: DialogScript = prev ?? {
+                id: '',
+                npcId: npc.id,
+                spotId,
+                type,
+                lines: [],
+                order: 0,
+                isActive: true,
+                createdAt: '',
+                updatedAt: '',
+            };
+            const lines = [...base.lines];
+            lines[index] = { ...lines[index], [field]: value } as DialogLine;
+            return { ...base, lines };
+        });
+    };
+
+    const handleAddLine = (type: DialogScriptType) => {
+        updateScriptState(type, (prev) => {
+            const base: DialogScript = prev ?? {
+                id: '',
+                npcId: npc.id,
+                spotId,
+                type,
+                lines: [],
+                order: 0,
+                isActive: true,
+                createdAt: '',
+                updatedAt: '',
+            };
+            return {
+                ...base,
+                lines: [...(base.lines || []), { speaker: npc.name, text: '', emotion: 'neutral' }],
+            };
+        });
+    };
+
+    const handleRemoveLine = (type: DialogScriptType, index: number) => {
+        updateScriptState(type, (prev) => {
+            if (!prev) return prev;
+            const lines = [...prev.lines];
+            lines.splice(index, 1);
+            return { ...prev, lines };
+        });
+    };
+
+    const handleSave = async (type: DialogScriptType) => {
+        const script = dialogScripts[type];
+        if (!script || script.lines.length === 0) {
+            alert('请先填写至少一行对话');
+            return;
+        }
+
+        setSavingType(type);
+        try {
+            const hasId = Boolean(script.id);
+            const payload = {
+                npcId: npc.id,
+                spotId,
+                type,
+                lines: script.lines,
+                condition: script.condition,
+                order: script.order || 0,
+                isActive: script.isActive ?? true,
+            };
+
+            const res = await fetch(hasId ? `/api/admin/dialog-scripts/${script.id}` : '/api/admin/dialog-scripts', {
+                method: hasId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(hasId ? { ...script, ...payload } : payload),
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                const saved: DialogScript = data.script;
+                setDialogScripts(prev => ({ ...prev, [type]: saved }));
+            } else {
+                alert(data.error || '保存失败');
+            }
+        } catch (err) {
+            console.error('保存对话脚本失败', err);
+            alert('保存对话脚本失败');
+        } finally {
+            setSavingType(null);
+        }
+    };
+
+    const emotionOptions: NPCEmotion[] = ['neutral', 'happy', 'sad', 'surprised', 'angry', 'thinking'];
+
+    return (
+        <div className="space-y-4">
+            {/* NPC 基本信息展示（只读） */}
+            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-lg">
+                {npc.sprite && (
+                    <img src={npc.sprite} alt={npc.name} className="w-16 h-16 rounded-lg object-cover" />
+                )}
+                <div className="flex-1 min-w-0">
+                    <div className="font-medium">{npc.name}</div>
+                    <div className="text-sm text-white/60">{npc.role}</div>
+                    <div className="text-xs text-white/40 mt-1 line-clamp-2">{npc.description}</div>
+                </div>
+            </div>
+
+            {/* 对话脚本编辑 */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <h6 className="text-sm font-medium text-white/80">对话脚本（此景点）</h6>
+                    {loadingDialogs && <span className="text-xs text-white/50">加载中...</span>}
+                </div>
+                {dialogTypes.map(({ type, label }) => {
+                    const script = dialogScripts[type];
+                    return (
+                        <div key={type} className="border border-white/10 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">{label}</span>
+                                <button
+                                    onClick={() => handleAddLine(type)}
+                                    className="text-xs px-2 py-1 bg-white/10 rounded hover:bg-white/20"
+                                >
+                                    添加行
+                                </button>
+                            </div>
+                            {(script?.lines || []).map((line, idx) => (
+                                <div key={`${type}-line-${idx}`} className="grid grid-cols-12 gap-2 items-center">
+                                    <input
+                                        className="form-input col-span-2"
+                                        placeholder="说话者"
+                                        value={line.speaker}
+                                        onChange={(e) => handleLineChange(type, idx, 'speaker', e.target.value)}
+                                    />
+                                    <input
+                                        className="form-input col-span-7"
+                                        placeholder="对话内容"
+                                        value={line.text}
+                                        onChange={(e) => handleLineChange(type, idx, 'text', e.target.value)}
+                                    />
+                                    <select
+                                        className="form-input col-span-2"
+                                        value={line.emotion || 'neutral'}
+                                        onChange={(e) => handleLineChange(type, idx, 'emotion', e.target.value)}
+                                    >
+                                        {emotionOptions.map(em => (
+                                            <option key={em} value={em}>{em}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        onClick={() => handleRemoveLine(type, idx)}
+                                        className="text-xs text-red-300 hover:text-red-200"
+                                    >
+                                        删除
+                                    </button>
+                                </div>
+                            ))}
+                            {(script?.lines?.length || 0) === 0 && (
+                                <div className="text-xs text-white/50">暂无对话，点击上方"添加行"开始编辑。</div>
+                            )}
+                            <div className="flex items-center justify-end gap-3 pt-2">
+                                <label className="text-xs text-white/60 flex items-center gap-1">
+                                    顺序
+                                    <input
+                                        type="number"
+                                        className="form-input w-20"
+                                        value={script?.order ?? 0}
+                                        onChange={(e) => updateScriptState(type, (prev) => prev ? { ...prev, order: parseInt(e.target.value || '0') } : prev)}
+                                    />
+                                </label>
+                                <label className="text-xs text-white/60 flex items-center gap-1">
+                                    <input
+                                        type="checkbox"
+                                        checked={script?.isActive ?? true}
+                                        onChange={(e) => updateScriptState(type, (prev) => prev ? { ...prev, isActive: e.target.checked } : prev)}
+                                    />
+                                    启用
+                                </label>
+                                <button
+                                    onClick={() => handleSave(type)}
+                                    disabled={savingType === type}
+                                    className="text-xs px-3 py-1 rounded bg-gradient-to-r from-indigo-500 to-purple-600 disabled:opacity-50"
+                                >
+                                    {savingType === type ? '保存中...' : '保存脚本'}
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+// ============================================
 // 通用表单组件
 // ============================================
 
@@ -1886,6 +2170,436 @@ function MediaUpload({
                     </button>
                 </div>
             )}
+        </div>
+    );
+}
+
+// ============================================
+// NPC 管理组件
+// ============================================
+
+interface NPCSectionProps {
+    worldId: string;
+    npcs: SpotNPC[];
+    onNPCsChange: (npcs: SpotNPC[]) => void;
+}
+
+function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
+    const [editingNPC, setEditingNPC] = useState<SpotNPC | null>(null);
+    const [isCreating, setIsCreating] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [showAIGenerateModal, setShowAIGenerateModal] = useState(false);
+    const [aiPrompt, setAIPrompt] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generateError, setGenerateError] = useState<string | null>(null);
+
+    const handleCreateNPC = async () => {
+        setIsCreating(true);
+        try {
+            const response = await fetch(`/api/admin/worlds/${worldId}/npcs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: '新 NPC',
+                    role: '居民',
+                    description: '',
+                    backstory: '',
+                    personality: [],
+                    appearance: '',
+                    speakingStyle: '',
+                    generationStatus: 'pending',
+                }),
+            });
+            const data = await response.json();
+            if (data.success && data.npc) {
+                onNPCsChange([...npcs, data.npc]);
+                setEditingNPC(data.npc);
+            }
+        } catch (err) {
+            console.error('创建 NPC 失败', err);
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    const handleAIGenerate = async () => {
+        if (!aiPrompt.trim()) {
+            setGenerateError('请输入 NPC 的描述要求');
+            return;
+        }
+
+        setIsGenerating(true);
+        setGenerateError(null);
+
+        try {
+            const response = await fetch(`/api/admin/worlds/${worldId}/npcs/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: aiPrompt }),
+            });
+            const data = await response.json();
+            if (data.success && data.npc) {
+                onNPCsChange([...npcs, data.npc]);
+                setEditingNPC(data.npc);
+                setShowAIGenerateModal(false);
+                setAIPrompt('');
+            } else {
+                setGenerateError(data.error || 'AI 生成失败');
+            }
+        } catch (err) {
+            console.error('AI 生成 NPC 失败', err);
+            setGenerateError('网络错误，请重试');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleSaveNPC = async (npc: SpotNPC) => {
+        setIsSaving(true);
+        try {
+            const response = await fetch(`/api/admin/npcs/${npc.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(npc),
+            });
+            const data = await response.json();
+            if (data.success && data.npc) {
+                onNPCsChange(npcs.map(n => n.id === npc.id ? data.npc : n));
+                setEditingNPC(null);
+            }
+        } catch (err) {
+            console.error('保存 NPC 失败', err);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDeleteNPC = async (npcId: string) => {
+        if (!confirm('确定要删除这个 NPC 吗？')) return;
+        try {
+            const response = await fetch(`/api/admin/npcs/${npcId}`, {
+                method: 'DELETE',
+            });
+            const data = await response.json();
+            if (data.success) {
+                onNPCsChange(npcs.filter(n => n.id !== npcId));
+                if (editingNPC?.id === npcId) {
+                    setEditingNPC(null);
+                }
+            }
+        } catch (err) {
+            console.error('删除 NPC 失败', err);
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">NPC 管理 ({npcs.length})</h2>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowAIGenerateModal(true)}
+                        className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg text-sm font-medium flex items-center gap-2"
+                    >
+                        <span>✨</span>
+                        AI 生成
+                    </button>
+                    <button
+                        onClick={handleCreateNPC}
+                        disabled={isCreating}
+                        className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-sm font-medium disabled:opacity-50"
+                    >
+                        {isCreating ? '创建中...' : '+ 手动新增'}
+                    </button>
+                </div>
+            </div>
+
+            {/* NPC 列表 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {npcs.map(npc => (
+                    <div
+                        key={npc.id}
+                        className={`bg-white/5 border rounded-xl p-4 cursor-pointer transition-all ${
+                            editingNPC?.id === npc.id
+                                ? 'border-indigo-500/50 bg-indigo-500/10'
+                                : 'border-white/10 hover:border-white/20'
+                        }`}
+                        onClick={() => setEditingNPC(npc)}
+                    >
+                        <div className="flex gap-3">
+                            {npc.sprite ? (
+                                <img
+                                    src={npc.sprite}
+                                    alt={npc.name}
+                                    className="w-16 h-16 rounded-lg object-cover"
+                                />
+                            ) : (
+                                <div className="w-16 h-16 rounded-lg bg-white/10 flex items-center justify-center text-white/30 text-xs">
+                                    暂无
+                                </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                <div className="font-medium truncate">{npc.name}</div>
+                                <div className="text-sm text-white/50">{npc.role}</div>
+                                <div className="text-xs text-white/40 mt-1 line-clamp-2">
+                                    {npc.description || '暂无描述'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {npcs.length === 0 && (
+                <div className="text-center py-12 text-white/40">
+                    <div className="text-4xl mb-2">👤</div>
+                    <div>暂无 NPC，点击"新增 NPC"创建</div>
+                </div>
+            )}
+
+            {/* NPC 编辑弹窗 */}
+            {editingNPC && (
+                <NPCEditorModal
+                    npc={editingNPC}
+                    onSave={handleSaveNPC}
+                    onDelete={() => handleDeleteNPC(editingNPC.id)}
+                    onClose={() => setEditingNPC(null)}
+                    isSaving={isSaving}
+                />
+            )}
+
+            {/* AI 生成弹窗 */}
+            {showAIGenerateModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-xl shadow-2xl">
+                        <div className="p-6 border-b border-white/10">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-bold flex items-center gap-2">
+                                    <span>✨</span>
+                                    AI 生成 NPC
+                                </h3>
+                                <button
+                                    onClick={() => {
+                                        setShowAIGenerateModal(false);
+                                        setAIPrompt('');
+                                        setGenerateError(null);
+                                    }}
+                                    className="text-white/50 hover:text-white"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-white/80 mb-2">
+                                    描述你想要的 NPC 角色
+                                </label>
+                                <textarea
+                                    value={aiPrompt}
+                                    onChange={(e) => setAIPrompt(e.target.value)}
+                                    placeholder="例如：一个神秘的老者，是这个世界的守护者，知道很多古老的秘密..."
+                                    rows={4}
+                                    className="form-input w-full"
+                                    disabled={isGenerating}
+                                />
+                                <p className="text-xs text-white/40 mt-2">
+                                    AI 会根据你的描述，结合世界的背景、文化、居民特点等信息，生成一个完整的 NPC 角色。
+                                </p>
+                            </div>
+
+                            {generateError && (
+                                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-sm text-red-300">
+                                    {generateError}
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 justify-end pt-2">
+                                <button
+                                    onClick={() => {
+                                        setShowAIGenerateModal(false);
+                                        setAIPrompt('');
+                                        setGenerateError(null);
+                                    }}
+                                    disabled={isGenerating}
+                                    className="px-4 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-sm font-medium disabled:opacity-50"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    onClick={handleAIGenerate}
+                                    disabled={isGenerating || !aiPrompt.trim()}
+                                    className="px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <span className="animate-spin">⏳</span>
+                                            生成中...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span>✨</span>
+                                            开始生成
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ============================================
+// NPC 编辑弹窗组件
+// ============================================
+
+interface NPCEditorModalProps {
+    npc: SpotNPC;
+    onSave: (npc: SpotNPC) => void;
+    onDelete: () => void;
+    onClose: () => void;
+    isSaving: boolean;
+}
+
+function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorModalProps) {
+    const [editNPC, setEditNPC] = useState<SpotNPC>({ ...npc });
+
+    const updateField = <K extends keyof SpotNPC>(field: K, value: SpotNPC[K]) => {
+        setEditNPC(prev => ({ ...prev, [field]: value }));
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+            <div className="bg-neutral-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 sticky top-0 bg-neutral-900">
+                    <div>
+                        <div className="text-lg font-bold">编辑 NPC</div>
+                        <div className="text-white/50 text-sm">{editNPC.name} · {editNPC.role}</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={onDelete}
+                            className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm"
+                        >
+                            删除
+                        </button>
+                        <button
+                            onClick={() => onSave(editNPC)}
+                            disabled={isSaving}
+                            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-sm font-medium disabled:opacity-50"
+                        >
+                            {isSaving ? '保存中...' : '保存'}
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="px-3 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-sm"
+                        >
+                            关闭
+                        </button>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <FormField label="名称">
+                            <input
+                                type="text"
+                                value={editNPC.name}
+                                onChange={(e) => updateField('name', e.target.value)}
+                                className="form-input"
+                            />
+                        </FormField>
+                        <FormField label="角色">
+                            <input
+                                type="text"
+                                value={editNPC.role}
+                                onChange={(e) => updateField('role', e.target.value)}
+                                className="form-input"
+                            />
+                        </FormField>
+                    </div>
+
+                    <FormField label="简介">
+                        <textarea
+                            value={editNPC.description}
+                            onChange={(e) => updateField('description', e.target.value)}
+                            rows={3}
+                            className="form-input"
+                        />
+                    </FormField>
+
+                    <FormField label="背景故事">
+                        <textarea
+                            value={editNPC.backstory}
+                            onChange={(e) => updateField('backstory', e.target.value)}
+                            rows={4}
+                            className="form-input"
+                        />
+                    </FormField>
+
+                    <FormField label="外貌描述">
+                        <textarea
+                            value={editNPC.appearance}
+                            onChange={(e) => updateField('appearance', e.target.value)}
+                            rows={2}
+                            className="form-input"
+                        />
+                    </FormField>
+
+                    <FormField label="说话风格">
+                        <input
+                            type="text"
+                            value={editNPC.speakingStyle}
+                            onChange={(e) => updateField('speakingStyle', e.target.value)}
+                            className="form-input"
+                        />
+                    </FormField>
+
+                    <FormField label="性格特点">
+                        <TagsInput
+                            value={editNPC.personality || []}
+                            onChange={(tags) => updateField('personality', tags)}
+                        />
+                    </FormField>
+
+                    <FormField label="兴趣爱好">
+                        <TagsInput
+                            value={editNPC.interests || []}
+                            onChange={(tags) => updateField('interests', tags)}
+                        />
+                    </FormField>
+
+                    <FormField label="立绘">
+                        <MediaUpload
+                            value={editNPC.sprite}
+                            onChange={(url) => updateField('sprite', url)}
+                            prompt={buildNPCPortraitPrompt({
+                                name: editNPC.name,
+                                role: editNPC.role,
+                                appearance: editNPC.appearance,
+                                personality: editNPC.personality || [],
+                            })}
+                        />
+                    </FormField>
+
+                    <FormField label="生成状态">
+                        <select
+                            value={editNPC.generationStatus}
+                            onChange={(e) => updateField('generationStatus', e.target.value as SpotNPC['generationStatus'])}
+                            className="form-input"
+                        >
+                            <option value="pending">待生成</option>
+                            <option value="generating_text">生成文本中</option>
+                            <option value="generating_sprite">生成立绘中</option>
+                            <option value="ready">已就绪</option>
+                            <option value="error">错误</option>
+                        </select>
+                    </FormField>
+                </div>
+            </div>
         </div>
     );
 }

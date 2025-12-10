@@ -254,7 +254,43 @@ ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一�
     }
 ]`,
 
-    // NPC 生成 prompt
+    // 世界级 NPC 生成 prompt（不依赖景点）
+    generateWorldNPC: (world: World, userPrompt: string) => `请根据用户的需求描述，为当前世界创建一个独特的 NPC 角色。
+
+【用户需求】
+${userPrompt}
+
+【重要提醒 - 角色设定要求】
+- NPC 必须符合世界的居民特点：${world.inhabitants}
+- NPC 的说话风格必须符合世界的语言特色：${world.language}
+- NPC 的性格和外貌必须与世界文化相符
+- NPC 必须是友善、有趣、适合全年龄段的角色
+- 角色应该能够为游客提供有价值的信息和互动体验
+- 必须充分结合用户的需求描述来设计角色
+
+请创建一个符合世界观和用户需求的 NPC，包含：
+1. 名称（符合世界文化的名字）
+2. 角色定位（如：导游、店主、守护者、居民等）
+3. 简短描述
+4. 背景故事（150字左右，与世界背景有关联）
+5. 性格特点（3-5个积极正面的词语）
+6. 外貌描述（详细描述外貌特征，用于生成立绘，必须与世界居民特点相符）
+7. 说话风格（必须与世界语言特色相符）
+8. 兴趣爱好
+
+请以 JSON 格式返回：
+{
+    "name": "NPC名称",
+    "role": "角色定位",
+    "description": "简短描述",
+    "backstory": "背景故事",
+    "personality": ["性格1", "性格2", "性格3"],
+    "appearance": "详细外貌描述",
+    "speakingStyle": "说话风格",
+    "interests": ["兴趣1", "兴趣2"]
+}`,
+
+    // NPC 生成 prompt（基于景点）
     generateNPC: (spot: Spot, world: World) => `请为以下景点创建一个独特的 NPC 角色：
 
 景点信息：
@@ -616,7 +652,22 @@ export async function ai_generate_spots(
 }
 
 /**
- * 生成 NPC
+ * 生成世界级 NPC（不依赖景点）
+ */
+export async function ai_generate_world_npc(
+    world: World,
+    userPrompt: string,
+    config: AIGenerateConfig,
+    options?: GenerateOptions
+): Promise<GenerateResult<Omit<SpotNPC, 'id' | 'worldId' | 'spotId' | 'sprite' | 'sprites' | 'greetingDialogId' | 'dialogOptions' | 'generationStatus'>>> {
+    const prompt = PROMPTS.generateWorldNPC(world, userPrompt);
+    // 使用包含世界设定的增强 system prompt
+    const enhancedSystemPrompt = buildEnhancedSystemPrompt(world);
+    return callOpenAI(prompt, config, options, `生成世界NPC-${world.name}`, 'generate_world_npc', { worldId: world.id }, enhancedSystemPrompt);
+}
+
+/**
+ * 生成 NPC（基于景点）
  */
 export async function ai_generate_npc(
     spot: Spot,
@@ -798,6 +849,7 @@ export const ai_generate = {
     travelProjects: ai_generate_travel_projects,
     travelVehicle: ai_generate_travel_vehicle,
     spots: ai_generate_spots,
+    worldNpc: ai_generate_world_npc,
     npc: ai_generate_npc,
     dialog: ai_generate_dialog,
     npcDialog: ai_generate_npc_dialog,

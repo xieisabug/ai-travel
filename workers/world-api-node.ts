@@ -12,7 +12,7 @@ import {
     WorldGenerationService,
     type WorldServiceConfig,
 } from '../app/lib/ai/world-service';
-import { ai_generate_npc_dialog } from '../app/lib/ai/generate';
+import { ai_generate_npc_dialog, ai_generate_world_npc, type AIGenerateConfig } from '../app/lib/ai/generate';
 import { getStorage } from './storage/sqlite';
 import { taskQueue, type Task } from './task-queue';
 import { apiLogger } from './logger';
@@ -1523,11 +1523,73 @@ worldApi.get('/admin/npcs', async (c) => {
 
     const limit = parseInt(c.req.query('limit') || '200');
     const offset = parseInt(c.req.query('offset') || '0');
+    const worldId = c.req.query('worldId');
 
     const storage = getStorage();
-    const { npcs, total } = await storage.getAllNPCs({ limit, offset });
+    const { npcs, total } = await storage.getAllNPCs({ limit, offset, worldId: worldId || undefined });
 
     return c.json({ success: true, npcs, total });
+});
+
+/**
+ * 获取指定世界的 NPC 列表
+ * GET /api/admin/worlds/:worldId/npcs
+ */
+worldApi.get('/admin/worlds/:worldId/npcs', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const { worldId } = c.req.param();
+    const storage = getStorage();
+    const npcs = await storage.getNPCsByWorldId(worldId);
+
+    return c.json({ success: true, npcs });
+});
+
+/**
+ * 创建 NPC
+ * POST /api/admin/worlds/:worldId/npcs
+ */
+worldApi.post('/admin/worlds/:worldId/npcs', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const { worldId } = c.req.param();
+    const body = await c.req.json<Partial<SpotNPC>>();
+
+    const storage = getStorage();
+
+    // 验证世界是否存在
+    const world = await storage.getWorld(worldId);
+    if (!world) {
+        return c.json({ success: false, error: '世界不存在' }, 404);
+    }
+
+    const npc: SpotNPC = {
+        id: generateId('npc_'),
+        worldId,
+        name: body.name || '未命名 NPC',
+        role: body.role || '居民',
+        description: body.description || '',
+        backstory: body.backstory || '',
+        personality: body.personality || [],
+        appearance: body.appearance || '',
+        speakingStyle: body.speakingStyle || '',
+        interests: body.interests,
+        sprite: body.sprite,
+        sprites: body.sprites,
+        greetingDialogId: body.greetingDialogId,
+        dialogOptions: body.dialogOptions,
+        generationStatus: body.generationStatus || 'pending',
+    };
+
+    await storage.saveNPC(npc, worldId);
+
+    apiLogger.info(`✅ 管理员 ${currentUser.username} 在世界 ${worldId} 创建了 NPC ${npc.id}`);
+
+    return c.json({ success: true, npc });
 });
 
 worldApi.put('/admin/npcs/:id', async (c) => {
@@ -1551,6 +1613,10 @@ worldApi.put('/admin/npcs/:id', async (c) => {
         role?: string;
         description?: string;
         appearance?: string;
+        backstory?: string;
+        personality?: string[];
+        speakingStyle?: string;
+        interests?: string[];
     }>();
 
     const mergedSprites = body.sprites ? { ...(npc.sprites || {}), ...body.sprites } : npc.sprites;
@@ -1564,13 +1630,115 @@ worldApi.put('/admin/npcs/:id', async (c) => {
         role: body.role ?? npc.role,
         description: body.description ?? npc.description,
         appearance: body.appearance ?? npc.appearance,
+        backstory: body.backstory ?? npc.backstory,
+        personality: body.personality ?? npc.personality,
+        speakingStyle: body.speakingStyle ?? npc.speakingStyle,
+        interests: body.interests ?? npc.interests,
     };
 
-    await storage.saveNPC(updatedNPC, npc.spotId);
+    await storage.saveNPC(updatedNPC, npc.worldId);
 
     apiLogger.info(`✅ 管理员 ${currentUser.username} 更新了 NPC ${id}`);
 
     return c.json({ success: true, npc: updatedNPC });
+});
+
+/**
+ * 删除 NPC
+ * DELETE /api/admin/npcs/:id
+ */
+worldApi.delete('/admin/npcs/:id', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const { id } = c.req.param();
+    const storage = getStorage();
+
+    const npc = await storage.getNPC(id);
+    if (!npc) {
+        return c.json({ success: false, error: 'NPC 不存在' }, 404);
+    }
+
+    await storage.deleteNPC(id);
+
+    apiLogger.info(`✅ 管理员 ${currentUser.username} 删除了 NPC ${id}`);
+
+    return c.json({ success: true });
+});
+
+/**
+ * AI 生成 NPC
+ * POST /api/admin/worlds/:worldId/npcs/generate
+ */
+worldApi.post('/admin/worlds/:worldId/npcs/generate', async (c) => {
+    const currentUser = await getCurrentUserFromRequest(c);
+    if (!currentUser) return c.json({ success: false, error: '未登录' }, 401);
+    if (currentUser.role !== 'admin') return c.json({ success: false, error: '无权限' }, 403);
+
+    const { worldId } = c.req.param();
+    const body = await c.req.json<{ prompt: string }>();
+
+    if (!body.prompt || body.prompt.trim().length === 0) {
+        return c.json({ success: false, error: '请提供 NPC 描述' }, 400);
+    }
+
+    const storage = getStorage();
+
+    // 验证世界是否存在
+    const world = await storage.getWorld(worldId);
+    if (!world) {
+        return c.json({ success: false, error: '世界不存在' }, 404);
+    }
+
+    // 配置 AI
+    const aiConfig: AIGenerateConfig = {
+        apiKey: process.env.OPENAI_API_KEY,
+        baseURL: process.env.OPENAI_BASE_URL,
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        temperature: 0.8,
+        maxTokens: 2000,
+    };
+
+    apiLogger.info(`🤖 开始为世界 ${world.name} AI 生成 NPC，用户提示: ${body.prompt.slice(0, 50)}...`);
+
+    try {
+        const result = await ai_generate_world_npc(world, body.prompt, aiConfig);
+
+        if (!result.success || !result.data) {
+            return c.json({ success: false, error: result.error || 'AI 生成失败' }, 500);
+        }
+
+        // 创建完整的 NPC 对象
+        const npc: SpotNPC = {
+            id: generateId('npc_'),
+            worldId,
+            name: result.data.name,
+            role: result.data.role,
+            description: result.data.description,
+            backstory: result.data.backstory,
+            personality: result.data.personality,
+            appearance: result.data.appearance,
+            speakingStyle: result.data.speakingStyle,
+            interests: result.data.interests,
+            sprite: undefined,
+            sprites: undefined,
+            greetingDialogId: undefined,
+            dialogOptions: [],
+            generationStatus: 'pending',
+        };
+
+        // 保存 NPC
+        await storage.saveNPC(npc, worldId);
+
+        apiLogger.info(`✅ AI 生成 NPC 成功: ${npc.name} (${npc.role})`);
+
+        return c.json({ success: true, npc });
+    } catch (err) {
+        const error = err as Error;
+        apiLogger.error(`AI 生成 NPC 失败: ${error.message}`);
+        return c.json({ success: false, error: error.message || 'AI 生成失败' }, 500);
+    }
 });
 
 // ============================================

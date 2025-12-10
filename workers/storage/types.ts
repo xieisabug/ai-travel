@@ -22,6 +22,7 @@ export type AICallType =
     | 'generate_vehicle'
     | 'generate_projects'
     | 'generate_spots'
+    | 'generate_world_npc'
     | 'generate_npc'
     | 'generate_dialog'
     | 'generate_text'
@@ -154,9 +155,11 @@ export interface IStorageProvider {
     // NPC 操作
     getNPC(id: string): Promise<SpotNPC | null>;
     getNPCsBySpotId(spotId: string): Promise<SpotNPC[]>;
+    getNPCsByWorldId(worldId: string): Promise<SpotNPC[]>;
     getNPCsByIds(ids: string[]): Promise<SpotNPC[]>;
     getAllNPCs(params?: { limit?: number; offset?: number }): Promise<{ npcs: SpotNPC[]; total: number }>;
-    saveNPC(npc: SpotNPC, spotId?: string): Promise<void>;
+    saveNPC(npc: SpotNPC, worldId: string): Promise<void>;
+    deleteNPC(id: string): Promise<void>;
 
     // 对话脚本操作
     getDialogScript(id: string): Promise<DialogScript | null>;

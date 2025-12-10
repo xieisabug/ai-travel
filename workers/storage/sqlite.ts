@@ -35,7 +35,7 @@ let initPromise: Promise<SqlJsDatabase> | null = null;
 // ============================================
 
 /** 当前数据库 schema 版本 */
-const CURRENT_DB_VERSION = 5;
+const CURRENT_DB_VERSION = 7;
 
 /**
  * 数据库迁移定义
@@ -82,6 +82,43 @@ const migrations: Record<number, string[]> = {
     // 版本 5: 景点存储 NPC 引用列表
     5: [
         `ALTER TABLE spots ADD COLUMN npc_ids TEXT`,
+    ],
+
+    // 版本 6: NPC 独立化，添加 world_id 字段，spot_id 变为可选
+    6: [
+        `ALTER TABLE npcs ADD COLUMN world_id TEXT`,
+    ],
+
+    // 版本 7: 重建 npcs 表，移除 spot_id 的 NOT NULL 约束
+    7: [
+        // 1. 创建新表（spot_id 可选）
+        `CREATE TABLE IF NOT EXISTS npcs_new (
+            id TEXT PRIMARY KEY,
+            world_id TEXT,
+            spot_id TEXT,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            description TEXT NOT NULL,
+            backstory TEXT,
+            personality TEXT,
+            appearance TEXT,
+            speaking_style TEXT,
+            interests TEXT,
+            sprite TEXT,
+            sprites TEXT,
+            greeting_dialog_id TEXT,
+            dialog_options TEXT,
+            generation_status TEXT NOT NULL
+        )`,
+        // 2. 复制数据
+        `INSERT INTO npcs_new SELECT id, world_id, spot_id, name, role, description, backstory, personality, appearance, speaking_style, interests, sprite, sprites, greeting_dialog_id, dialog_options, generation_status FROM npcs`,
+        // 3. 删除旧表
+        `DROP TABLE npcs`,
+        // 4. 重命名新表
+        `ALTER TABLE npcs_new RENAME TO npcs`,
+        // 5. 重建索引
+        `CREATE INDEX IF NOT EXISTS idx_npcs_world ON npcs(world_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_npcs_spot ON npcs(spot_id)`,
     ],
 };
 
@@ -377,7 +414,8 @@ function createTables(db: SqlJsDatabase): void {
     db.run(`
         CREATE TABLE IF NOT EXISTS npcs (
             id TEXT PRIMARY KEY,
-            spot_id TEXT NOT NULL,
+            world_id TEXT,
+            spot_id TEXT,
             name TEXT NOT NULL,
             role TEXT NOT NULL,
             description TEXT NOT NULL,
@@ -390,8 +428,7 @@ function createTables(db: SqlJsDatabase): void {
             sprites TEXT,
             greeting_dialog_id TEXT,
             dialog_options TEXT,
-            generation_status TEXT NOT NULL,
-            FOREIGN KEY (spot_id) REFERENCES spots(id) ON DELETE CASCADE
+            generation_status TEXT NOT NULL
         )
     `);
 
@@ -530,6 +567,7 @@ function createTables(db: SqlJsDatabase): void {
     db.run(`CREATE INDEX IF NOT EXISTS idx_projects_world ON projects(world_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_spots_project ON spots(project_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_npcs_spot ON npcs(spot_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_npcs_world ON npcs(world_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`);
@@ -617,6 +655,9 @@ export class SQLiteStorageProvider implements IStorageProvider {
         // 加载关联的项目
         world.travelProjects = await this.getProjectsByWorldId(id);
 
+        // 加载关联的 NPC
+        world.npcs = await this.getNPCsByWorldId(id);
+
         return world;
     }
 
@@ -630,6 +671,7 @@ export class SQLiteStorageProvider implements IStorageProvider {
             const world = this.rowToWorld(result[0].columns, row);
             world.travelVehicle = await this.getVehicleByWorldId(world.id) || undefined;
             world.travelProjects = await this.getProjectsByWorldId(world.id);
+            world.npcs = await this.getNPCsByWorldId(world.id);
             worlds.push(world);
         }
 
@@ -679,6 +721,13 @@ export class SQLiteStorageProvider implements IStorageProvider {
         // 保存关联的项目
         for (const project of world.travelProjects) {
             await this.saveProject({ ...project, worldId: world.id });
+        }
+
+        // 保存关联的 NPC
+        if (world.npcs) {
+            for (const npc of world.npcs) {
+                await this.saveNPC({ ...npc, worldId: world.id }, world.id);
+            }
         }
 
         saveToFile();
@@ -999,6 +1048,13 @@ export class SQLiteStorageProvider implements IStorageProvider {
         return result[0].values.map(row => this.rowToNPC(result[0].columns, row));
     }
 
+    async getNPCsByWorldId(worldId: string): Promise<SpotNPC[]> {
+        const db = await this.getDb();
+        const result = db.exec(`SELECT * FROM npcs WHERE world_id = ? ORDER BY name`, [worldId]);
+        if (result.length === 0) return [];
+        return result[0].values.map(row => this.rowToNPC(result[0].columns, row));
+    }
+
     async getNPCsByIds(ids: string[]): Promise<SpotNPC[]> {
         if (ids.length === 0) return [];
 
@@ -1016,19 +1072,34 @@ export class SQLiteStorageProvider implements IStorageProvider {
         return rows.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
     }
 
-    async getAllNPCs(params?: { limit?: number; offset?: number }): Promise<{ npcs: SpotNPC[]; total: number }> {
+    async getAllNPCs(params?: { limit?: number; offset?: number; worldId?: string }): Promise<{ npcs: SpotNPC[]; total: number }> {
         const db = await this.getDb();
         const limit = params?.limit ?? 200;
         const offset = params?.offset ?? 0;
 
-        const listResult = db.exec(`SELECT * FROM npcs ORDER BY name LIMIT ? OFFSET ?`, [limit, offset]);
+        let query = `SELECT * FROM npcs`;
+        let countQuery = `SELECT COUNT(*) as count FROM npcs`;
+        const queryParams: (string | number)[] = [];
+        const countParams: string[] = [];
+
+        if (params?.worldId) {
+            query += ` WHERE world_id = ?`;
+            countQuery += ` WHERE world_id = ?`;
+            queryParams.push(params.worldId);
+            countParams.push(params.worldId);
+        }
+
+        query += ` ORDER BY name LIMIT ? OFFSET ?`;
+        queryParams.push(limit, offset);
+
+        const listResult = db.exec(query, queryParams);
         const npcs = listResult.length === 0
             ? []
             : listResult[0].values.map(row => this.rowToNPC(listResult[0].columns, row));
 
         let total = npcs.length;
         try {
-            const countResult = db.exec(`SELECT COUNT(*) as count FROM npcs`);
+            const countResult = db.exec(countQuery, countParams);
             if (countResult.length > 0 && countResult[0].values.length > 0) {
                 total = Number(countResult[0].values[0][0]) || total;
             }
@@ -1039,23 +1110,24 @@ export class SQLiteStorageProvider implements IStorageProvider {
         return { npcs, total };
     }
 
-    async saveNPC(npc: SpotNPC, spotId?: string): Promise<void> {
+    async saveNPC(npc: SpotNPC, worldId: string): Promise<void> {
         const db = await this.getDb();
-        const resolvedSpotId = spotId || npc.spotId;
+        const resolvedWorldId = worldId || npc.worldId;
 
-        if (!resolvedSpotId) {
-            throw new Error('saveNPC: spotId is required');
+        if (!resolvedWorldId) {
+            throw new Error('saveNPC: worldId is required');
         }
 
         db.run(`
             INSERT OR REPLACE INTO npcs (
-                id, spot_id, name, role, description, backstory, personality,
+                id, world_id, spot_id, name, role, description, backstory, personality,
                 appearance, speaking_style, interests, sprite, sprites,
                 greeting_dialog_id, dialog_options, generation_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             npc.id,
-            resolvedSpotId,
+            resolvedWorldId,
+            npc.spotId || null,
             npc.name,
             npc.role,
             npc.description,
@@ -1073,6 +1145,12 @@ export class SQLiteStorageProvider implements IStorageProvider {
         saveToFile();
     }
 
+    async deleteNPC(id: string): Promise<void> {
+        const db = await this.getDb();
+        db.run(`DELETE FROM npcs WHERE id = ?`, [id]);
+        saveToFile();
+    }
+
     private rowToNPC(columns: string[], row: unknown[]): SpotNPC {
         const obj: Record<string, unknown> = {};
         columns.forEach((col, i) => {
@@ -1081,6 +1159,7 @@ export class SQLiteStorageProvider implements IStorageProvider {
 
         return {
             id: obj.id as string,
+            worldId: obj.world_id as string,
             name: obj.name as string,
             role: obj.role as string,
             description: obj.description as string,
@@ -1093,7 +1172,7 @@ export class SQLiteStorageProvider implements IStorageProvider {
             sprites: obj.sprites ? JSON.parse(obj.sprites as string) : undefined,
             greetingDialogId: obj.greeting_dialog_id as string | undefined,
             dialogOptions: obj.dialog_options ? JSON.parse(obj.dialog_options as string) : undefined,
-            spotId: obj.spot_id as string,
+            spotId: obj.spot_id as string | undefined,
             generationStatus: obj.generation_status as SpotNPC['generationStatus'],
         };
     }

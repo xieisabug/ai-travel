@@ -12,7 +12,6 @@ import WorldsGeneratePage from './routes/worlds.generate';
 import WorldDetailPage from './routes/worlds.$worldId';
 import WorldGame from './routes/world-game';
 import AdminWorlds from './routes/admin/worlds';
-import AdminNPCs from './routes/admin/npcs';
 import Profile from './routes/profile';
 
 // 认证 Provider
@@ -32,7 +31,6 @@ function App() {
                     <Route path="/world-game" element={<WorldGame />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/admin/worlds" element={<AdminWorlds />} />
-                    <Route path="/admin/npcs" element={<AdminNPCs />} />
                 </Routes>
             </AuthProvider>
         </BrowserRouter>
