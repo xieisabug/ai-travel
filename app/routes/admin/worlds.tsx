@@ -417,13 +417,12 @@ function WorldList({ worlds, onSelectWorld, onDeleteWorld }: WorldListProps) {
                             </div>
                         )}
                         <div className="absolute top-2 right-2">
-                            <span className={`px-2 py-1 rounded text-xs ${
-                                world.generationStatus === 'ready' || world.generationStatus === 'projects_ready'
+                            <span className={`px-2 py-1 rounded text-xs ${world.generationStatus === 'ready' || world.generationStatus === 'projects_ready'
                                     ? 'bg-green-500/20 text-green-400'
                                     : world.generationStatus === 'generating'
-                                    ? 'bg-yellow-500/20 text-yellow-400'
-                                    : 'bg-red-500/20 text-red-400'
-                            }`}>
+                                        ? 'bg-yellow-500/20 text-yellow-400'
+                                        : 'bg-red-500/20 text-red-400'
+                                }`}>
                                 {world.generationStatus}
                             </span>
                         </div>
@@ -528,11 +527,10 @@ function WorldEditor({
                         <button
                             key={section.id}
                             onClick={() => setActiveSection(section.id)}
-                            className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${
-                                activeSection === section.id
+                            className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeSection === section.id
                                     ? 'bg-indigo-500/20 text-indigo-400'
                                     : 'text-white/60 hover:text-white hover:bg-white/5'
-                            }`}
+                                }`}
                         >
                             {section.label}
                         </button>
@@ -708,7 +706,7 @@ function WorldEditor({
                                     className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
                                     title={(buildWorldCulturePrompts({
                                         name: world.name,
-        
+
                                         culture: world.culture,
                                         cuisine: world.cuisine,
                                         inhabitants: world.inhabitants,
@@ -1058,18 +1056,16 @@ function WorldEditor({
                                     <div className="flex items-center gap-3">
                                         <span className="text-white/40">{projectIndex + 1}.</span>
                                         <span className="font-medium">{project.name}</span>
-                                        <span className={`px-2 py-0.5 rounded text-xs ${
-                                            project.generationStatus === 'ready'
+                                        <span className={`px-2 py-0.5 rounded text-xs ${project.generationStatus === 'ready'
                                                 ? 'bg-green-500/20 text-green-400'
                                                 : 'bg-yellow-500/20 text-yellow-400'
-                                        }`}>
+                                            }`}>
                                             {project.generationStatus}
                                         </span>
                                     </div>
                                     <svg
-                                        className={`w-5 h-5 text-white/40 transition-transform ${
-                                            expandedProjects.has(project.id) ? 'rotate-180' : ''
-                                        }`}
+                                        className={`w-5 h-5 text-white/40 transition-transform ${expandedProjects.has(project.id) ? 'rotate-180' : ''
+                                            }`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
@@ -1184,9 +1180,8 @@ function WorldEditor({
                                                                 <span className="text-sm">{spot.name}</span>
                                                             </div>
                                                             <svg
-                                                                className={`w-4 h-4 text-white/40 transition-transform ${
-                                                                    expandedSpots.has(spot.id) ? 'rotate-180' : ''
-                                                                }`}
+                                                                className={`w-4 h-4 text-white/40 transition-transform ${expandedSpots.has(spot.id) ? 'rotate-180' : ''
+                                                                    }`}
                                                                 fill="none"
                                                                 stroke="currentColor"
                                                                 viewBox="0 0 24 24"
@@ -1352,7 +1347,7 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
             {/* NPC 关联管理 */}
             <div className="pt-4 border-t border-white/10">
                 <h5 className="text-sm font-medium mb-3 text-white/80">关联 NPC ({linkedNpcs.length})</h5>
-                
+
                 {/* 添加 NPC 下拉选择 */}
                 {availableNpcs.length > 0 && (
                     <div className="flex gap-2 mb-4">
@@ -1405,9 +1400,8 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
                                             移除
                                         </span>
                                         <svg
-                                            className={`w-4 h-4 text-white/40 transition-transform ${
-                                                expandedNpcs.has(npc.id) ? 'rotate-180' : ''
-                                            }`}
+                                            className={`w-4 h-4 text-white/40 transition-transform ${expandedNpcs.has(npc.id) ? 'rotate-180' : ''
+                                                }`}
                                             fill="none"
                                             stroke="currentColor"
                                             viewBox="0 0 24 24"
@@ -1486,7 +1480,7 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
 
     useEffect(() => {
         loadDialogScripts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [npc.id]);
 
     const updateScriptState = (type: DialogScriptType, updater: (prev: DialogScript | null) => DialogScript | null) => {
@@ -1798,7 +1792,7 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
 
     useEffect(() => {
         loadDialogScripts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [npc.id, spotId]);
 
     const updateScriptState = (type: DialogScriptType, updater: (prev: DialogScript | null) => DialogScript | null) => {
@@ -2319,11 +2313,10 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
                 {npcs.map(npc => (
                     <div
                         key={npc.id}
-                        className={`bg-white/5 border rounded-xl p-4 cursor-pointer transition-all ${
-                            editingNPC?.id === npc.id
+                        className={`bg-white/5 border rounded-xl p-4 cursor-pointer transition-all ${editingNPC?.id === npc.id
                                 ? 'border-indigo-500/50 bg-indigo-500/10'
                                 : 'border-white/10 hover:border-white/20'
-                        }`}
+                            }`}
                         onClick={() => setEditingNPC(npc)}
                     >
                         <div className="flex gap-3">
