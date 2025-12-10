@@ -15,8 +15,5 @@
 .env
 .env.local
 
-# Data
-/data/
-
 dist
 .claude
