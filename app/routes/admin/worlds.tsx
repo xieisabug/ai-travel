@@ -604,7 +604,7 @@ function WorldEditor({
                             />
                         </FormField>
                         <FormField label="封面图片">
-                            <ImageUpload
+                            <MediaUpload
                                 value={world.coverImage}
                                 onChange={(url) => onUpdateWorld('coverImage', url)}
                                 prompt={buildWorldCoverPrompt({
@@ -616,7 +616,7 @@ function WorldEditor({
                             />
                         </FormField>
                         <FormField label="主图">
-                            <ImageUpload
+                            <MediaUpload
                                 value={world.imageUrl}
                                 onChange={(url) => onUpdateWorld('imageUrl', url)}
                                 prompt={buildWorldCoverPrompt({
@@ -698,7 +698,7 @@ function WorldEditor({
                             </div>
                             <div className="space-y-3">
                                 {(world.overviewImages || []).map((url, idx) => (
-                                    <ImageUpload
+                                    <MediaUpload
                                         key={`overview-${idx}`}
                                         value={url}
                                         onChange={(newUrl) => {
@@ -811,7 +811,7 @@ function WorldEditor({
                             </div>
                             <div className="space-y-3">
                                 {(world.cultureImages || []).map((url, idx) => (
-                                    <ImageUpload
+                                    <MediaUpload
                                         key={`culture-${idx}`}
                                         value={url}
                                         onChange={(newUrl) => {
@@ -984,7 +984,7 @@ function WorldEditor({
                             />
                         </FormField>
                         <FormField label="图片">
-                            <ImageUpload
+                            <MediaUpload
                                 value={world.travelVehicle.image}
                                 onChange={(url) => onUpdateVehicle('image', url)}
                                 prompt={buildTravelVehiclePrompt({
@@ -1131,7 +1131,7 @@ function WorldEditor({
                                             />
                                         </FormField>
                                         <FormField label="封面图片">
-                                            <ImageUpload
+                                            <MediaUpload
                                                 value={project.coverImage}
                                                 onChange={(url) => onUpdateProject(project.id, 'coverImage', url)}
                                                 prompt={buildProjectCoverPrompt({
@@ -1139,6 +1139,16 @@ function WorldEditor({
                                                     description: project.description,
                                                     tags: project.tags || [],
                                                 }, world.name)}
+                                            />
+                                        </FormField>
+                                        <FormField label="背景音乐（URL 或上传音频，可选）">
+                                            <MediaUpload
+                                                value={project.bgmUrl}
+                                                onChange={(url) => onUpdateProject(project.id, 'bgmUrl', url)}
+                                                accept="audio/*"
+                                                placeholder="输入音乐 URL 或上传音频"
+                                                uploadLabel="上传音乐"
+                                                previewType="audio"
                                             />
                                         </FormField>
                                         <div className="grid grid-cols-3 gap-4">
@@ -1282,7 +1292,7 @@ function SpotEditor({ spot, worldName, spotId, onUpdate, onUpdateNpc }: SpotEdit
                 />
             </FormField>
             <FormField label="景点图片">
-                <ImageUpload
+                <MediaUpload
                     value={spot.image}
                     onChange={(url) => onUpdate('image', url)}
                     prompt={buildSpotImagePrompt({
@@ -1576,7 +1586,7 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
                 />
             </FormField>
             <FormField label="立绘图片" small>
-                <ImageUpload
+                <MediaUpload
                     value={npc.sprite}
                     onChange={(url) => onUpdate('sprite', url)}
                     prompt={buildNPCPortraitPrompt({
@@ -1719,14 +1729,22 @@ function FormField({
     );
 }
 
-function ImageUpload({
+function MediaUpload({
     value,
     onChange,
     prompt,
+    accept = 'image/*',
+    placeholder = '输入图片 URL 或上传',
+    uploadLabel = '上传',
+    previewType = 'image',
 }: {
     value?: string;
     onChange: (url: string) => void;
     prompt?: string;
+    accept?: string;
+    placeholder?: string;
+    uploadLabel?: string;
+    previewType?: 'image' | 'audio' | 'none';
 }) {
     const [isUploading, setIsUploading] = useState(false);
     const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
@@ -1813,14 +1831,14 @@ function ImageUpload({
                     type="text"
                     value={value || ''}
                     onChange={(e) => onChange(e.target.value)}
-                    placeholder="输入图片 URL 或上传"
+                    placeholder={placeholder}
                     className="form-input flex-1"
                 />
                 <label className="px-4 py-2 bg-white/10 hover:bg-white/15 rounded-xl cursor-pointer text-sm transition-colors">
-                    {isUploading ? '上传中...' : '上传'}
+                    {isUploading ? '上传中...' : uploadLabel}
                     <input
                         type="file"
-                        accept="image/*"
+                        accept={accept}
                         onChange={handleFileChange}
                         className="hidden"
                         disabled={isUploading}
@@ -1833,8 +1851,14 @@ function ImageUpload({
                 </div>
             )}
             {value && (
-                <div className="relative w-32 h-20 bg-white/5 rounded-lg overflow-hidden">
-                    <img src={value} alt="" className="w-full h-full object-cover" />
+                <div
+                    className={`relative ${previewType === 'audio' ? 'w-full max-w-sm p-2' : 'w-32 h-20'} bg-white/5 rounded-lg overflow-hidden`}
+                >
+                    {previewType === 'audio' ? (
+                        <audio src={value} controls className="w-full" />
+                    ) : previewType === 'image' ? (
+                        <img src={value} alt="" className="w-full h-full object-cover" />
+                    ) : null}
                     <button
                         onClick={() => onChange('')}
                         className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white/60 hover:text-white"

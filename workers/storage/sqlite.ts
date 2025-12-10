@@ -35,7 +35,7 @@ let initPromise: Promise<SqlJsDatabase> | null = null;
 // ============================================
 
 /** 当前数据库 schema 版本 */
-const CURRENT_DB_VERSION = 3;
+const CURRENT_DB_VERSION = 4;
 
 /**
  * 数据库迁移定义
@@ -72,6 +72,11 @@ const migrations: Record<number, string[]> = {
     3: [
         `ALTER TABLE worlds ADD COLUMN overview_images TEXT`,
         `ALTER TABLE worlds ADD COLUMN culture_images TEXT`,
+    ],
+
+    // 版本 4: 旅游项目背景音乐
+    4: [
+        `ALTER TABLE projects ADD COLUMN bgm_url TEXT`,
     ],
 };
 
@@ -324,6 +329,7 @@ function createTables(db: SqlJsDatabase): void {
             name TEXT NOT NULL,
             description TEXT NOT NULL,
             cover_image TEXT,
+            bgm_url TEXT,
             duration INTEGER,
             difficulty INTEGER,
             tags TEXT,
@@ -816,16 +822,17 @@ export class SQLiteStorageProvider implements IStorageProvider {
         const db = await this.getDb();
         db.run(`
             INSERT OR REPLACE INTO projects (
-                id, world_id, name, description, cover_image, duration, difficulty,
+                id, world_id, name, description, cover_image, bgm_url, duration, difficulty,
                 tags, suitable_for, tour_route, generation_status, selected_count,
                 available_at, telesummary, estimated_duration, created_at, details_generated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             project.id,
             project.worldId,
             project.name,
             project.description,
             project.coverImage || null,
+            project.bgmUrl || null,
             project.duration,
             project.difficulty,
             JSON.stringify(project.tags),
@@ -860,6 +867,7 @@ export class SQLiteStorageProvider implements IStorageProvider {
             name: obj.name as string,
             description: obj.description as string,
             coverImage: obj.cover_image as string | undefined,
+            bgmUrl: obj.bgm_url as string | undefined,
             duration: obj.duration as number,
             difficulty: obj.difficulty as number,
             tags: JSON.parse((obj.tags as string) || '[]'),

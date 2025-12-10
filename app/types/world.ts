@@ -174,6 +174,8 @@ export interface TravelProject {
     description: string;
     /** 封面图片 URL */
     coverImage?: string;
+    /** 背景音乐 URL（进入项目时自动播放） */
+    bgmUrl?: string;
     /** 所属世界 ID */
     worldId: string;
 

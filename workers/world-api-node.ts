@@ -1482,24 +1482,29 @@ worldApi.post('/upload', async (c) => {
             return c.json({ success: false, error: '未提供文件' }, 400);
         }
 
+        const mimeType = file.type || '';
+        const isImage = mimeType.startsWith('image/');
+        const isAudio = mimeType.startsWith('audio/');
+
         // 验证文件类型
-        if (!file.type.startsWith('image/')) {
-            return c.json({ success: false, error: '只能上传图片文件' }, 400);
+        if (!isImage && !isAudio) {
+            return c.json({ success: false, error: '只能上传图片或音频文件' }, 400);
         }
 
-        // 验证文件大小 (最大 10MB)
-        if (file.size > 10 * 1024 * 1024) {
-            return c.json({ success: false, error: '文件大小不能超过 10MB' }, 400);
+        // 验证文件大小 (图片 10MB / 音频 20MB)
+        const maxSize = isAudio ? 20 * 1024 * 1024 : 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+            return c.json({ success: false, error: `文件大小不能超过 ${isAudio ? '20MB' : '10MB'}` }, 400);
         }
 
         // 生成文件名
-        const ext = file.name.split('.').pop() || 'png';
+        const ext = file.name.split('.').pop() || (isAudio ? 'mp3' : 'png');
         const fileName = `upload_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
         const buffer = Buffer.from(await file.arrayBuffer());
 
-        const url = await uploadToQiniu(fileName, buffer, file.type);
+        const url = await uploadToQiniu(fileName, buffer, mimeType || (isAudio ? 'audio/mpeg' : 'image/png'));
 
-        apiLogger.info(`✅ 管理员 ${currentUser.username} 上传了图片到七牛云: ${fileName}`);
+        apiLogger.info(`✅ 管理员 ${currentUser.username} 上传了${isAudio ? '音频' : '图片'}到七牛云: ${fileName}`);
 
         return c.json({ success: true, url });
     } catch (error) {

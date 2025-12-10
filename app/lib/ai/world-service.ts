@@ -371,6 +371,7 @@ export class WorldGenerationService {
             ...projectData,
             worldId: world.id,
             coverImage: undefined,
+            bgmUrl: undefined,
             spots: [],
             tourRoute: [],
             generationStatus: 'pending' as const,

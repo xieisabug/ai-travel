@@ -12,7 +12,7 @@ import {
   ReturningScreen,
   TravelingScreen,
 } from '~/components/world-game-phases';
-import type { TravelSession, Spot, NPCPublicProfile } from '~/types/world';
+import type { TravelSession, Spot, NPCPublicProfile, TravelProject } from '~/types/world';
 
 type GamePhase = 'loading' | 'departing' | 'traveling' | 'exploring' | 'dialog' | 'returning' | 'completed';
 
@@ -38,13 +38,34 @@ export default function WorldGamePage() {
   const [error, setError] = useState<string | null>(null);
   const [departComicShown, setDepartComicShown] = useState(false);
   const [departComicRevealed, setDepartComicRevealed] = useState(false);
+  const [projectBgmUrl, setProjectBgmUrl] = useState<string | null>(null);
 
   const typewriterRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const departTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioProjectRef = useRef<string | null>(null);
+
+  const loadProjectBgm = useCallback(async (projectId: string) => {
+    if (!projectId) {
+      setProjectBgmUrl(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}`);
+      if (!response.ok) throw new Error('加载项目失败');
+      const data = (await response.json()) as { project?: TravelProject };
+      setProjectBgmUrl(data.project?.bgmUrl || null);
+    } catch (err) {
+      console.error('加载项目音乐失败:', err);
+      setProjectBgmUrl(null);
+    }
+  }, []);
 
   const loadSession = useCallback(async () => {
     if (!sessionId) {
       setError('无效的会话ID');
+      setProjectBgmUrl(null);
       return;
     }
 
@@ -53,6 +74,7 @@ export default function WorldGamePage() {
       if (!response.ok) throw new Error('加载会话失败');
       const data: TravelSession = await response.json();
       setSession(data);
+      await loadProjectBgm(data.projectId);
 
       switch (data.status) {
         case 'preparing':
@@ -79,8 +101,9 @@ export default function WorldGamePage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载失败');
+      setProjectBgmUrl(null);
     }
-  }, [sessionId]);
+  }, [sessionId, loadProjectBgm]);
 
   const loadSpot = async (projectId: string, spotId: string) => {
     if (!spotId) {
@@ -278,8 +301,74 @@ export default function WorldGamePage() {
 
   useEffect(() => {
     return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!session?.projectId) return;
+    loadProjectBgm(session.projectId);
+  }, [session?.projectId, loadProjectBgm]);
+
+  useEffect(() => {
+    const allowedStartPhases: GamePhase[] = ['exploring', 'dialog', 'returning', 'completed'];
+    const canStart = projectBgmUrl && allowedStartPhases.includes(phase);
+
+    // 切换项目或无音乐时，停止并重置
+    if (!projectBgmUrl || (session?.projectId && audioProjectRef.current && audioProjectRef.current !== session.projectId)) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      audioProjectRef.current = null;
+      return;
+    }
+
+    // 仅在首次进入允许阶段时启动当前项目的音乐
+    if (canStart && session?.projectId) {
+      if (audioProjectRef.current !== session.projectId) {
+        // 新项目，初始化音频
+        if (!audioRef.current) {
+          audioRef.current = new Audio(projectBgmUrl);
+        } else {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.src = projectBgmUrl;
+        }
+        audioProjectRef.current = session.projectId;
+      }
+
+      const audioEl = audioRef.current;
+      if (!audioEl) return;
+
+      audioEl.loop = true;
+
+      const playAudio = async () => {
+        try {
+          await audioEl.play();
+        } catch (err) {
+          console.warn('背景音乐播放失败，可能需要用户交互', err);
+        }
+      };
+
+      // 如果已经在播放同一项目且未暂停，则不重启
+      if (audioEl.paused) {
+        playAudio();
+      }
+    }
+  }, [projectBgmUrl, phase, session?.projectId]);
+
+  useEffect(() => {
+    return () => {
       if (departTimerRef.current) {
         clearTimeout(departTimerRef.current);
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
       }
     };
   }, []);
