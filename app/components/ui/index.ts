@@ -1,15 +1,15 @@
 // Section & Layout
-export { SectionHeader, HighlightText, type SectionHeaderProps, type ColorTheme } from './SectionHeader';
-export { PageBackground, LoadingScreen, ErrorScreen, type PageBackgroundProps, type LoadingScreenProps, type ErrorScreenProps } from './PageBackground';
+export { SectionHeader, HighlightText, type SectionHeaderProps, type ColorTheme } from './section-header';
+export { PageBackground, LoadingScreen, ErrorScreen, type PageBackgroundProps, type LoadingScreenProps, type ErrorScreenProps } from './page-background';
 
 // Buttons
-export { GlowButton, type GlowButtonProps, type ButtonVariant, type ButtonSize, type ButtonColorTheme } from './GlowButton';
+export { GlowButton, type GlowButtonProps, type ButtonVariant, type ButtonSize, type ButtonColorTheme } from './glow-button';
 
 // Cards
-export { FeatureCard, FeatureGrid, type FeatureCardProps, type FeatureGridProps, type FeatureCardTheme } from './FeatureCard';
-export { ImageCard, ImageBadge, type ImageCardProps, type ImageBadgeProps, type ImageCardSize, type ImageCardTheme } from './ImageCard';
-export { ProjectCard, ProjectCarousel, type ProjectCardProps, type ProjectCarouselProps, type ProjectCardTheme } from './ProjectCard';
-export { CardStack, type CardStackProps } from './CardStack';
+export { FeatureCard, FeatureGrid, type FeatureCardProps, type FeatureGridProps, type FeatureCardTheme } from './feature-card';
+export { ImageCard, ImageBadge, type ImageCardProps, type ImageBadgeProps, type ImageCardSize, type ImageCardTheme } from './image-card';
+export { ProjectCard, ProjectCarousel, type ProjectCardProps, type ProjectCarouselProps, type ProjectCardTheme } from './project-card';
+export { CardStack, type CardStackProps } from './card-stack';
 
 // Effects
-export { FloatingParticles, type FloatingParticlesProps, type ParticleColor } from './FloatingParticles';
+export { FloatingParticles, type FloatingParticlesProps, type ParticleColor } from './floating-particles';
