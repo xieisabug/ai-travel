@@ -25,8 +25,11 @@ export default function WorldGamePage() {
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [departComicShown, setDepartComicShown] = useState(false);
+  const [departComicRevealed, setDepartComicRevealed] = useState(false);
 
   const typewriterRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const departTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 加载会话数据
   const loadSession = useCallback(async () => {
@@ -277,6 +280,15 @@ export default function WorldGamePage() {
     loadSession();
   }, [loadSession]);
 
+  // 清理启程定时器
+  useEffect(() => {
+    return () => {
+      if (departTimerRef.current) {
+        clearTimeout(departTimerRef.current);
+      }
+    };
+  }, []);
+
   // 渲染加载状态
   if (phase === 'loading') {
     return (
@@ -311,23 +323,43 @@ export default function WorldGamePage() {
 
   // 启程中
   if (phase === 'departing') {
+    const departureComicImage = '/img/departure-comic.jpg';
+
+    const handleDepartReveal = () => {
+      if (departComicShown) return;
+      setDepartComicShown(true);
+      requestAnimationFrame(() => setDepartComicRevealed(true));
+      departTimerRef.current = setTimeout(() => {
+        setPhase('traveling');
+      }, 3000);
+    };
+
     return (
       <div className="min-h-screen relative overflow-hidden bg-black">
         <div className="absolute inset-0 bg-gradient-to-b from-black via-indigo-950/50 to-purple-900/30" />
         <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(102,126,234,0.2),transparent)] pointer-events-none" />
         <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-8 text-center text-white">
-          <h1 className="text-5xl font-bold mb-4 bg-gradient-to-br from-indigo-500 to-purple-600 bg-clip-text text-transparent drop-shadow-lg">
-            🚀 启程
-          </h1>
-          <p className="text-xl text-white/80 mb-8">正在前往神秘的异世界...</p>
-          <div className="my-8">
-            <div className="text-5xl animate-bounce">✈️</div>
+
+          {/* Comic strip: reveal bottom panels after click */}
+          <div className="relative max-w-3xl w-full mx-auto mb-10 overflow-hidden rounded-2xl border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+            <img
+              src={departureComicImage}
+              alt="Departure comic"
+              className="w-full h-full object-cover"
+            />
+            <div
+              className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/85 to-transparent transition-all duration-700 ease-out ${departComicRevealed ? 'h-0 opacity-0' : 'h-[68%] opacity-100'}`}
+            />
+            <div
+              className={`absolute inset-x-0 bottom-0 bg-black/90 backdrop-blur-[2px] transition-all duration-700 ease-out ${departComicRevealed ? 'h-0 opacity-0' : 'h-[68%] opacity-100'}`}
+            />
           </div>
           <button 
-            className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-8 py-4 rounded-full text-lg font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(102,126,234,0.4)]"
-            onClick={() => setPhase('traveling')}
+            className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-8 py-4 absolute rounded-full text-lg font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(102,126,234,0.4)] disabled:opacity-60 disabled:cursor-not-allowed"
+            onClick={handleDepartReveal}
+            disabled={departComicShown}
           >
-            开始旅程
+            {departComicShown ? '准备中...' : '开始旅程'}
           </button>
         </div>
       </div>
