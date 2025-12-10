@@ -1,3 +1,5 @@
+// NOTE: This file is used by the react-router data-router build. It intentionally imports from
+// "react-router" (not react-router-dom) for server/SPA builds. Client BrowserRouter lives in app/main.tsx.
 import {
   isRouteErrorResponse,
   Links,
