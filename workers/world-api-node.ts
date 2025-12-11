@@ -158,10 +158,17 @@ async function getSpotWithNPCs(
     const spot = await storage.getSpot(spotId);
     if (!spot || spot.projectId !== projectId) return null;
 
-    const npcIds = spot.npcIds?.length ? spot.npcIds : undefined;
-    const npcs = npcIds
-        ? await storage.getNPCsByIds(npcIds)
-        : await storage.getNPCsBySpotId(spot.id);
+    // 优先使用景点显式配置的 npcIds（管理后台设置的关联）
+    // 只有当 npcIds 完全没有配置时才回退到旧的 spotId 查询
+    let npcs: SpotNPC[] = [];
+    if (spot.npcIds && spot.npcIds.length > 0) {
+        npcs = await storage.getNPCsByIds(spot.npcIds);
+        apiLogger.debug(`景点 ${spotId} 使用显式 npcIds 关联`, { npcIds: spot.npcIds });
+    } else {
+        // 回退：查找 spotId 指向该景点的 NPC（兼容旧数据）
+        npcs = await storage.getNPCsBySpotId(spot.id);
+        apiLogger.debug(`景点 ${spotId} 回退到 spotId 查询 NPC`, { found: npcs.length });
+    }
 
     return { spot, npcs };
 }
@@ -172,13 +179,17 @@ async function hydrateWorldWithPublicNPCs(
 ): Promise<WorldWithNPCs> {
     const projects = await Promise.all(world.travelProjects.map(async project => {
         const spots = await Promise.all(project.spots.map(async spot => {
-            const npcs = spot.npcIds?.length
-                ? await storage.getNPCsByIds(spot.npcIds)
-                : await storage.getNPCsBySpotId(spot.id);
+            // 优先使用景点显式配置的 npcIds
+            let npcs: SpotNPC[] = [];
+            if (spot.npcIds && spot.npcIds.length > 0) {
+                npcs = await storage.getNPCsByIds(spot.npcIds);
+            } else {
+                npcs = await storage.getNPCsBySpotId(spot.id);
+            }
 
             return {
                 ...spot,
-                npcIds: spot.npcIds?.length ? spot.npcIds : npcs.map(n => n.id),
+                npcIds: spot.npcIds && spot.npcIds.length > 0 ? spot.npcIds : npcs.map(n => n.id),
                 npcs,
             };
         }));
@@ -195,6 +206,20 @@ async function hydrateWorldWithPublicNPCs(
     } as WorldWithNPCs;
 }
 
+/**
+ * 当 NPC 设定被更新时，清理已有的对话脚本，避免继续使用旧版本内容
+ */
+async function invalidateNPCDialogScripts(
+    npcId: string,
+    storage: ReturnType<typeof getStorage>
+): Promise<void> {
+    const scripts = await storage.getDialogScripts({ npcId });
+    if (!scripts.length) return;
+
+    await Promise.all(scripts.map(script => storage.deleteDialogScript(script.id)));
+    apiLogger.info(`🧹 已清理 NPC 对话脚本`, { npcId, removed: scripts.length });
+}
+
 async function preGenerateDialogScriptsForProject(
     project: TravelProject,
     world: World,
@@ -209,11 +234,15 @@ async function preGenerateDialogScriptsForProject(
     const dialogTypes: Array<'entry' | 'chat'> = ['entry', 'chat'];
 
     for (const spot of project.spots) {
-        const npcs = spot.npcIds?.length
-            ? await storage.getNPCsByIds(spot.npcIds)
-            : spot.npcs?.length
-                ? spot.npcs
-                : await storage.getNPCsBySpotId(spot.id);
+        // 优先使用景点显式配置的 npcIds
+        let npcs: SpotNPC[] = [];
+        if (spot.npcIds && spot.npcIds.length > 0) {
+            npcs = await storage.getNPCsByIds(spot.npcIds);
+        } else if (spot.npcs && spot.npcs.length > 0) {
+            npcs = spot.npcs.filter((n): n is SpotNPC => 'backstory' in n && 'personality' in n);
+        } else {
+            npcs = await storage.getNPCsBySpotId(spot.id);
+        }
 
         const fullNpcs = npcs.filter((n): n is SpotNPC => 'backstory' in n && 'personality' in n);
 
@@ -1637,6 +1666,7 @@ worldApi.put('/admin/npcs/:id', async (c) => {
     };
 
     await storage.saveNPC(updatedNPC, npc.worldId);
+    await invalidateNPCDialogScripts(id, storage);
 
     apiLogger.info(`✅ 管理员 ${currentUser.username} 更新了 NPC ${id}`);
 
@@ -1987,15 +2017,19 @@ worldApi.post('/game/npc/:npcId/dialog', async (c) => {
             return c.json({ error: 'NPC not found' }, 404);
         }
 
-        const targetSpot = targetNPC.spotId ? await storage.getSpot(targetNPC.spotId) : null;
+        // 优先使用请求中的景点，兼容新配置（NPC 通过 spotId 关联，而不是写死在 NPC 上）
+        const targetSpot = body.spotId
+            ? await storage.getSpot(body.spotId)
+            : (targetNPC.spotId ? await storage.getSpot(targetNPC.spotId) : null);
+
         if (!targetSpot) {
-            apiLogger.warn(`NPC 缺少景点引用: ${npcId}`);
+            apiLogger.warn(`NPC 缺少有效的景点引用: npc=${npcId}, requestedSpot=${body.spotId || 'N/A'}`);
             return c.json({ error: 'NPC spot not found' }, 404);
         }
 
-        // 校验请求中的 spotId 与 NPC 归属一致
-        if (body.spotId && body.spotId !== targetSpot.id) {
-            apiLogger.warn(`NPC 归属景点不匹配: 请求 ${body.spotId}, 实际 ${targetSpot.id}`);
+        // 如果 NPC 本身的 spotId 不等于请求 spotId，记录警告但继续使用用户请求的景点
+        if (targetNPC.spotId && body.spotId && body.spotId !== targetNPC.spotId) {
+            apiLogger.warn(`NPC 景点引用不一致: npc.spotId=${targetNPC.spotId}, request=${body.spotId}`);
         }
 
         const targetProject = await storage.getProject(targetSpot.projectId);
