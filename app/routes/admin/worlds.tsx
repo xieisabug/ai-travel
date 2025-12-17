@@ -1,8 +1,17 @@
 // @ts-nocheck
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuthContext } from '~/hooks/use-auth';
-import type { World, TravelVehicle, TravelProject, Spot, SpotNPC, DialogScript, DialogScriptType, DialogLine } from '~/types/world';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuthContext } from "~/hooks/use-auth";
+import type {
+    World,
+    TravelVehicle,
+    TravelProject,
+    Spot,
+    SpotNPC,
+    DialogScript,
+    DialogScriptType,
+    DialogLine,
+} from "~/types/world";
 import {
     buildWorldCoverPrompt,
     buildWorldOverviewPrompt,
@@ -13,14 +22,14 @@ import {
     buildProjectCoverPrompt,
     buildSpotImagePrompt,
     buildNPCPortraitPrompt,
-} from '~/lib/ai/image-generate';
+} from "~/lib/ai/image-generate";
 
 const copyPrompt = async (text?: string) => {
     if (!text) return;
     try {
         await navigator.clipboard.writeText(text);
     } catch (error) {
-        console.error('复制提示词失败', error);
+        console.error("复制提示词失败", error);
     }
 };
 
@@ -28,7 +37,7 @@ const copyPrompt = async (text?: string) => {
 // 类型定义
 // ============================================
 
-type EditMode = 'list' | 'world' | 'project' | 'spot';
+type EditMode = "list" | "world" | "project" | "spot";
 
 interface EditState {
     mode: EditMode;
@@ -48,7 +57,7 @@ export default function AdminWorlds() {
     // 状态
     const [worlds, setWorlds] = useState<World[]>([]);
     const [selectedWorld, setSelectedWorld] = useState<World | null>(null);
-    const [editState, setEditState] = useState<EditState>({ mode: 'list' });
+    const [editState, setEditState] = useState<EditState>({ mode: "list" });
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -56,14 +65,14 @@ export default function AdminWorlds() {
 
     // 权限检查
     useEffect(() => {
-        if (!authLoading && (!isAuthenticated || user?.role !== 'admin')) {
-            navigate('/');
+        if (!authLoading && (!isAuthenticated || user?.role !== "admin")) {
+            navigate("/");
         }
     }, [authLoading, isAuthenticated, user, navigate]);
 
     // 加载世界列表 - 只在认证完成且是管理员时加载
     useEffect(() => {
-        if (!authLoading && isAuthenticated && user?.role === 'admin') {
+        if (!authLoading && isAuthenticated && user?.role === "admin") {
             loadWorlds();
         }
     }, [authLoading, isAuthenticated, user]);
@@ -71,7 +80,7 @@ export default function AdminWorlds() {
     const loadWorlds = async () => {
         try {
             setIsLoading(true);
-            const response = await fetch('/api/worlds');
+            const response = await fetch("/api/worlds");
             const data: any = await response.json();
             if (data.error) {
                 setError(data.error);
@@ -79,7 +88,7 @@ export default function AdminWorlds() {
                 setWorlds(data.worlds || []);
             }
         } catch (err) {
-            setError('加载世界列表失败');
+            setError("加载世界列表失败");
         } finally {
             setIsLoading(false);
         }
@@ -95,10 +104,10 @@ export default function AdminWorlds() {
             } else {
                 // API 直接返回 world 对象
                 setSelectedWorld(data);
-                setEditState({ mode: 'world', worldId });
+                setEditState({ mode: "world", worldId });
             }
         } catch (err) {
-            setError('加载世界详情失败');
+            setError("加载世界详情失败");
         } finally {
             setIsLoading(false);
         }
@@ -110,22 +119,29 @@ export default function AdminWorlds() {
         try {
             setIsSaving(true);
             setError(null);
-            const response = await fetch(`/api/admin/worlds/${selectedWorld.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(selectedWorld),
-            });
+            const response = await fetch(
+                `/api/admin/worlds/${selectedWorld.id}`,
+                {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(selectedWorld),
+                }
+            );
             const data: any = await response.json();
             if (data.success) {
-                setSuccessMessage('保存成功！');
+                setSuccessMessage("保存成功！");
                 setTimeout(() => setSuccessMessage(null), 3000);
                 // 更新列表中的世界
-                setWorlds(prev => prev.map(w => w.id === selectedWorld.id ? selectedWorld : w));
+                setWorlds((prev) =>
+                    prev.map((w) =>
+                        w.id === selectedWorld.id ? selectedWorld : w
+                    )
+                );
             } else {
-                setError(data.error || '保存失败');
+                setError(data.error || "保存失败");
             }
         } catch (err) {
-            setError('保存失败');
+            setError("保存失败");
         } finally {
             setIsSaving(false);
         }
@@ -137,9 +153,9 @@ export default function AdminWorlds() {
             setError(null);
 
             // 1. 创建生成任务
-            const response = await fetch('/api/worlds/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+            const response = await fetch("/api/worlds/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
             });
             const data: any = await response.json();
 
@@ -149,7 +165,7 @@ export default function AdminWorlds() {
             }
 
             if (!data.taskId) {
-                setError('生成任务创建失败');
+                setError("生成任务创建失败");
                 return;
             }
 
@@ -168,62 +184,61 @@ export default function AdminWorlds() {
                     return;
                 }
 
-                if (taskData.status === 'completed' && taskData.result) {
+                if (taskData.status === "completed" && taskData.result) {
                     // 任务完成，获取生成的世界
                     const world = taskData.result;
-                    setWorlds(prev => [world, ...prev]);
+                    setWorlds((prev) => [world, ...prev]);
                     setSelectedWorld(world);
-                    setEditState({ mode: 'world', worldId: world.id });
-                    setSuccessMessage('世界生成成功！');
+                    setEditState({ mode: "world", worldId: world.id });
+                    setSuccessMessage("世界生成成功！");
                     setTimeout(() => setSuccessMessage(null), 3000);
                     return;
                 }
 
-                if (taskData.status === 'failed') {
-                    setError(taskData.error || '生成失败');
+                if (taskData.status === "failed") {
+                    setError(taskData.error || "生成失败");
                     return;
                 }
 
                 if (attempts >= maxAttempts) {
-                    setError('生成超时，请稍后重试');
+                    setError("生成超时，请稍后重试");
                     return;
                 }
 
                 // 继续轮询
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 1000));
                 return pollTask();
             };
 
             await pollTask();
-
         } catch (err) {
-            setError('生成世界失败');
+            setError("生成世界失败");
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleDeleteWorld = async (worldId: string) => {
-        if (!confirm('确定要删除这个世界吗？此操作不可恢复。')) return;
+        if (!confirm("确定要删除这个世界吗？此操作不可恢复。")) return;
 
         try {
             const response = await fetch(`/api/worlds/${worldId}`, {
-                method: 'DELETE',
+                method: "DELETE",
             });
             const data: any = await response.json();
             if (data.success) {
-                setWorlds(prev => prev.filter(w => w.id !== worldId));
+                setWorlds((prev) => prev.filter((w) => w.id !== worldId));
                 if (selectedWorld?.id === worldId) {
                     setSelectedWorld(null);
-                    setEditState({ mode: 'list' });
+                    setEditState({ mode: "list" });
                 }
-                setSuccessMessage('删除成功！');
+                setSuccessMessage("删除成功！");
                 setTimeout(() => setSuccessMessage(null), 3000);
             } else {
-                setError(data.error || '删除失败');
+                setError(data.error || "删除失败");
             }
         } catch (err) {
-            setError('删除失败');
+            setError("删除失败");
         }
     };
 
@@ -243,29 +258,38 @@ export default function AdminWorlds() {
     };
 
     // 更新项目字段
-    const updateProjectField = (projectId: string, field: keyof TravelProject, value: any) => {
+    const updateProjectField = (
+        projectId: string,
+        field: keyof TravelProject,
+        value: any
+    ) => {
         if (!selectedWorld) return;
         setSelectedWorld({
             ...selectedWorld,
-            travelProjects: selectedWorld.travelProjects.map(p =>
+            travelProjects: selectedWorld.travelProjects.map((p) =>
                 p.id === projectId ? { ...p, [field]: value } : p
             ),
         });
     };
 
     // 更新场景字段
-    const updateSpotField = (projectId: string, spotId: string, field: keyof Spot, value: any) => {
+    const updateSpotField = (
+        projectId: string,
+        spotId: string,
+        field: keyof Spot,
+        value: any
+    ) => {
         if (!selectedWorld) return;
         setSelectedWorld({
             ...selectedWorld,
-            travelProjects: selectedWorld.travelProjects.map(p =>
+            travelProjects: selectedWorld.travelProjects.map((p) =>
                 p.id === projectId
                     ? {
-                        ...p,
-                        spots: p.spots.map(s =>
-                            s.id === spotId ? { ...s, [field]: value } : s
-                        ),
-                    }
+                          ...p,
+                          spots: p.spots.map((s) =>
+                              s.id === spotId ? { ...s, [field]: value } : s
+                          ),
+                      }
                     : p
             ),
         });
@@ -281,7 +305,7 @@ export default function AdminWorlds() {
     }
 
     // 如果不是管理员
-    if (!isAuthenticated || user?.role !== 'admin') {
+    if (!isAuthenticated || user?.role !== "admin") {
         return null;
     }
 
@@ -292,18 +316,28 @@ export default function AdminWorlds() {
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <button
-                            onClick={() => navigate('/')}
+                            onClick={() => navigate("/")}
                             className="text-white/60 hover:text-white transition-colors"
                         >
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            <svg
+                                className="w-6 h-6"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                                />
                             </svg>
                         </button>
                         <h1 className="text-xl font-bold">世界管理</h1>
-                        {editState.mode !== 'list' && (
+                        {editState.mode !== "list" && (
                             <button
                                 onClick={() => {
-                                    setEditState({ mode: 'list' });
+                                    setEditState({ mode: "list" });
                                     setSelectedWorld(null);
                                 }}
                                 className="text-white/60 hover:text-white text-sm"
@@ -313,22 +347,22 @@ export default function AdminWorlds() {
                         )}
                     </div>
                     <div className="flex items-center gap-3">
-                        {editState.mode === 'world' && (
+                        {editState.mode === "world" && (
                             <button
                                 onClick={handleSaveWorld}
                                 disabled={isSaving}
                                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-sm font-medium disabled:opacity-50"
                             >
-                                {isSaving ? '保存中...' : '保存更改'}
+                                {isSaving ? "保存中..." : "保存更改"}
                             </button>
                         )}
-                        {editState.mode === 'list' && (
+                        {editState.mode === "list" && (
                             <button
                                 onClick={handleGenerateWorld}
                                 disabled={isLoading}
                                 className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-sm font-medium disabled:opacity-50"
                             >
-                                {isLoading ? '生成中...' : '生成新世界'}
+                                {isLoading ? "生成中..." : "生成新世界"}
                             </button>
                         )}
                     </div>
@@ -341,7 +375,12 @@ export default function AdminWorlds() {
                     {error && (
                         <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 mb-4">
                             {error}
-                            <button onClick={() => setError(null)} className="float-right">×</button>
+                            <button
+                                onClick={() => setError(null)}
+                                className="float-right"
+                            >
+                                ×
+                            </button>
                         </div>
                     )}
                     {successMessage && (
@@ -354,9 +393,11 @@ export default function AdminWorlds() {
 
             {/* 主内容区 */}
             <main className="max-w-7xl mx-auto px-6 py-8">
-                {isLoading && editState.mode === 'list' ? (
-                    <div className="text-center text-white/60 py-20">加载中...</div>
-                ) : editState.mode === 'list' ? (
+                {isLoading && editState.mode === "list" ? (
+                    <div className="text-center text-white/60 py-20">
+                        加载中...
+                    </div>
+                ) : editState.mode === "list" ? (
                     <WorldList
                         worlds={worlds}
                         onSelectWorld={loadWorldDetail}
@@ -391,14 +432,16 @@ function WorldList({ worlds, onSelectWorld, onDeleteWorld }: WorldListProps) {
         return (
             <div className="text-center py-20">
                 <div className="text-white/40 text-lg mb-4">还没有任何世界</div>
-                <div className="text-white/30 text-sm">点击"生成新世界"开始创建</div>
+                <div className="text-white/30 text-sm">
+                    点击"生成新世界"开始创建
+                </div>
             </div>
         );
     }
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {worlds.map(world => (
+            {worlds.map((world) => (
                 <div
                     key={world.id}
                     className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-all group"
@@ -417,12 +460,17 @@ function WorldList({ worlds, onSelectWorld, onDeleteWorld }: WorldListProps) {
                             </div>
                         )}
                         <div className="absolute top-2 right-2">
-                            <span className={`px-2 py-1 rounded text-xs ${world.generationStatus === 'ready' || world.generationStatus === 'projects_ready'
-                                    ? 'bg-green-500/20 text-green-400'
-                                    : world.generationStatus === 'generating'
-                                        ? 'bg-yellow-500/20 text-yellow-400'
-                                        : 'bg-red-500/20 text-red-400'
-                                }`}>
+                            <span
+                                className={`px-2 py-1 rounded text-xs ${
+                                    world.generationStatus === "ready" ||
+                                    world.generationStatus === "projects_ready"
+                                        ? "bg-green-500/20 text-green-400"
+                                        : world.generationStatus ===
+                                          "generating"
+                                        ? "bg-yellow-500/20 text-yellow-400"
+                                        : "bg-red-500/20 text-red-400"
+                                }`}
+                            >
                                 {world.generationStatus}
                             </span>
                         </div>
@@ -432,14 +480,22 @@ function WorldList({ worlds, onSelectWorld, onDeleteWorld }: WorldListProps) {
                     <div className="p-4">
                         <h3 className="font-bold text-lg mb-1">{world.name}</h3>
                         {world.subtitle && (
-                            <p className="text-white/40 text-sm mb-2">{world.subtitle}</p>
+                            <p className="text-white/40 text-sm mb-2">
+                                {world.subtitle}
+                            </p>
                         )}
-                        <p className="text-white/60 text-sm line-clamp-2 mb-4">{world.description}</p>
+                        <p className="text-white/60 text-sm line-clamp-2 mb-4">
+                            {world.description}
+                        </p>
 
                         <div className="flex items-center gap-2 text-xs text-white/40 mb-4">
-                            <span>{world.travelProjects?.length || 0} 个区域</span>
+                            <span>
+                                {world.travelProjects?.length || 0} 个区域
+                            </span>
                             <span>·</span>
-                            <span>{new Date(world.createdAt).toLocaleDateString()}</span>
+                            <span>
+                                {new Date(world.createdAt).toLocaleDateString()}
+                            </span>
                         </div>
 
                         <div className="flex gap-2">
@@ -471,8 +527,17 @@ interface WorldEditorProps {
     world: World;
     onUpdateWorld: (field: keyof World, value: any) => void;
     onUpdateVehicle: (field: keyof TravelVehicle, value: any) => void;
-    onUpdateProject: (projectId: string, field: keyof TravelProject, value: any) => void;
-    onUpdateSpot: (projectId: string, spotId: string, field: keyof Spot, value: any) => void;
+    onUpdateProject: (
+        projectId: string,
+        field: keyof TravelProject,
+        value: any
+    ) => void;
+    onUpdateSpot: (
+        projectId: string,
+        spotId: string,
+        field: keyof Spot,
+        value: any
+    ) => void;
 }
 
 function WorldEditor({
@@ -482,12 +547,14 @@ function WorldEditor({
     onUpdateProject,
     onUpdateSpot,
 }: WorldEditorProps) {
-    const [activeSection, setActiveSection] = useState<string>('basic');
-    const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+    const [activeSection, setActiveSection] = useState<string>("basic");
+    const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
+        new Set()
+    );
     const [expandedSpots, setExpandedSpots] = useState<Set<string>>(new Set());
 
     const toggleProject = (projectId: string) => {
-        setExpandedProjects(prev => {
+        setExpandedProjects((prev) => {
             const next = new Set(prev);
             if (next.has(projectId)) {
                 next.delete(projectId);
@@ -499,7 +566,7 @@ function WorldEditor({
     };
 
     const toggleSpot = (spotId: string) => {
-        setExpandedSpots(prev => {
+        setExpandedSpots((prev) => {
             const next = new Set(prev);
             if (next.has(spotId)) {
                 next.delete(spotId);
@@ -511,11 +578,11 @@ function WorldEditor({
     };
 
     const sections = [
-        { id: 'basic', label: '基础信息' },
-        { id: 'details', label: '风土人情' },
-        { id: 'npcs', label: 'NPC 管理' },
-        { id: 'vehicle', label: '旅行器' },
-        { id: 'projects', label: '区域' },
+        { id: "basic", label: "基础信息" },
+        { id: "details", label: "风土人情" },
+        { id: "npcs", label: "NPC 管理" },
+        { id: "vehicle", label: "旅行器" },
+        { id: "projects", label: "区域" },
     ];
 
     return (
@@ -523,14 +590,15 @@ function WorldEditor({
             {/* 左侧导航 */}
             <div className="w-48 shrink-0">
                 <div className="sticky top-24 space-y-1">
-                    {sections.map(section => (
+                    {sections.map((section) => (
                         <button
                             key={section.id}
                             onClick={() => setActiveSection(section.id)}
-                            className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${activeSection === section.id
-                                    ? 'bg-indigo-500/20 text-indigo-400'
-                                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                                }`}
+                            className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${
+                                activeSection === section.id
+                                    ? "bg-indigo-500/20 text-indigo-400"
+                                    : "text-white/60 hover:text-white hover:bg-white/5"
+                            }`}
                         >
                             {section.label}
                         </button>
@@ -541,28 +609,34 @@ function WorldEditor({
             {/* 右侧表单 */}
             <div className="flex-1 space-y-8">
                 {/* 基础信息 */}
-                {activeSection === 'basic' && (
+                {activeSection === "basic" && (
                     <FormSection title="基础信息">
                         <FormField label="世界名称" required>
                             <input
                                 type="text"
                                 value={world.name}
-                                onChange={(e) => onUpdateWorld('name', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld("name", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
                         <FormField label="副标题">
                             <input
                                 type="text"
-                                value={world.subtitle || ''}
-                                onChange={(e) => onUpdateWorld('subtitle', e.target.value)}
+                                value={world.subtitle || ""}
+                                onChange={(e) =>
+                                    onUpdateWorld("subtitle", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
                         <FormField label="简介" required>
                             <textarea
                                 value={world.description}
-                                onChange={(e) => onUpdateWorld('description', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld("description", e.target.value)
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -570,7 +644,12 @@ function WorldEditor({
                         <FormField label="详细描述">
                             <textarea
                                 value={world.detailedDescription}
-                                onChange={(e) => onUpdateWorld('detailedDescription', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld(
+                                        "detailedDescription",
+                                        e.target.value
+                                    )
+                                }
                                 rows={6}
                                 className="form-input"
                             />
@@ -578,7 +657,9 @@ function WorldEditor({
                         <FormField label="封面图片">
                             <MediaUpload
                                 value={world.coverImage}
-                                onChange={(url) => onUpdateWorld('coverImage', url)}
+                                onChange={(url) =>
+                                    onUpdateWorld("coverImage", url)
+                                }
                                 prompt={buildWorldCoverPrompt({
                                     name: world.name,
                                     description: world.description,
@@ -590,7 +671,9 @@ function WorldEditor({
                         <FormField label="主图">
                             <MediaUpload
                                 value={world.imageUrl}
-                                onChange={(url) => onUpdateWorld('imageUrl', url)}
+                                onChange={(url) =>
+                                    onUpdateWorld("imageUrl", url)
+                                }
                                 prompt={buildWorldCoverPrompt({
                                     name: world.name,
                                     description: world.description,
@@ -604,95 +687,126 @@ function WorldEditor({
                                 <button
                                     type="button"
                                     className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
-                                    title={(buildWorldOverviewPrompts({
-                                        name: world.name,
-                                        geography: world.geography,
-                                        climate: world.climate,
-                                        description: world.description,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[0])}
-                                    onClick={() => copyPrompt(buildWorldOverviewPrompts({
-                                        name: world.name,
-                                        geography: world.geography,
-                                        climate: world.climate,
-                                        description: world.description,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[0])}
-                                >
-                                    复制地理/地貌 prompt
-                                </button>
-                                <button
-                                    type="button"
-                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
-                                    title={(buildWorldOverviewPrompts({
-                                        name: world.name,
-                                        geography: world.geography,
-                                        climate: world.climate,
-                                        description: world.description,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[1])}
-                                    onClick={() => copyPrompt(buildWorldOverviewPrompts({
-                                        name: world.name,
-                                        geography: world.geography,
-                                        climate: world.climate,
-                                        description: world.description,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[1])}
-                                >
-                                    复制气候 prompt
-                                </button>
-                                <button
-                                    type="button"
-                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
-                                    title={(buildWorldOverviewPrompts({
-                                        name: world.name,
-                                        geography: world.geography,
-                                        climate: world.climate,
-                                        description: world.description,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[2])}
-                                    onClick={() => copyPrompt(buildWorldOverviewPrompts({
-                                        name: world.name,
-                                        geography: world.geography,
-                                        climate: world.climate,
-                                        description: world.description,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[2])}
-                                >
-                                    复制地标/场景 prompt
-                                </button>
-                            </div>
-                            <div className="space-y-3">
-                                {(world.overviewImages || []).map((url, idx) => (
-                                    <MediaUpload
-                                        key={`overview-${idx}`}
-                                        value={url}
-                                        onChange={(newUrl) => {
-                                            const next = [...(world.overviewImages || [])];
-                                            next[idx] = newUrl;
-                                            onUpdateWorld('overviewImages', next);
-                                        }}
-                                        prompt={buildWorldOverviewPrompt({
+                                    title={
+                                        buildWorldOverviewPrompts({
                                             name: world.name,
                                             geography: world.geography,
                                             climate: world.climate,
                                             description: world.description,
                                             tags: world.tags || [],
                                             visualStyle: world.visualStyle,
-                                        })}
-                                    />
-                                ))}
+                                        })[0]
+                                    }
+                                    onClick={() =>
+                                        copyPrompt(
+                                            buildWorldOverviewPrompts({
+                                                name: world.name,
+                                                geography: world.geography,
+                                                climate: world.climate,
+                                                description: world.description,
+                                                tags: world.tags || [],
+                                                visualStyle: world.visualStyle,
+                                            })[0]
+                                        )
+                                    }
+                                >
+                                    复制地理/地貌 prompt
+                                </button>
+                                <button
+                                    type="button"
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
+                                    title={
+                                        buildWorldOverviewPrompts({
+                                            name: world.name,
+                                            geography: world.geography,
+                                            climate: world.climate,
+                                            description: world.description,
+                                            tags: world.tags || [],
+                                            visualStyle: world.visualStyle,
+                                        })[1]
+                                    }
+                                    onClick={() =>
+                                        copyPrompt(
+                                            buildWorldOverviewPrompts({
+                                                name: world.name,
+                                                geography: world.geography,
+                                                climate: world.climate,
+                                                description: world.description,
+                                                tags: world.tags || [],
+                                                visualStyle: world.visualStyle,
+                                            })[1]
+                                        )
+                                    }
+                                >
+                                    复制气候 prompt
+                                </button>
+                                <button
+                                    type="button"
+                                    className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
+                                    title={
+                                        buildWorldOverviewPrompts({
+                                            name: world.name,
+                                            geography: world.geography,
+                                            climate: world.climate,
+                                            description: world.description,
+                                            tags: world.tags || [],
+                                            visualStyle: world.visualStyle,
+                                        })[2]
+                                    }
+                                    onClick={() =>
+                                        copyPrompt(
+                                            buildWorldOverviewPrompts({
+                                                name: world.name,
+                                                geography: world.geography,
+                                                climate: world.climate,
+                                                description: world.description,
+                                                tags: world.tags || [],
+                                                visualStyle: world.visualStyle,
+                                            })[2]
+                                        )
+                                    }
+                                >
+                                    复制地标/场景 prompt
+                                </button>
+                            </div>
+                            <div className="space-y-3">
+                                {(world.overviewImages || []).map(
+                                    (url, idx) => (
+                                        <MediaUpload
+                                            key={`overview-${idx}`}
+                                            value={url}
+                                            onChange={(newUrl) => {
+                                                const next = [
+                                                    ...(world.overviewImages ||
+                                                        []),
+                                                ];
+                                                next[idx] = newUrl;
+                                                onUpdateWorld(
+                                                    "overviewImages",
+                                                    next
+                                                );
+                                            }}
+                                            prompt={buildWorldOverviewPrompt({
+                                                name: world.name,
+                                                geography: world.geography,
+                                                climate: world.climate,
+                                                description: world.description,
+                                                tags: world.tags || [],
+                                                visualStyle: world.visualStyle,
+                                            })}
+                                        />
+                                    )
+                                )}
                                 {(world.overviewImages?.length || 0) < 3 && (
                                     <button
                                         type="button"
                                         className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white/70 text-sm"
-                                        onClick={() => onUpdateWorld('overviewImages', [...(world.overviewImages || []), ''])}
+                                        onClick={() =>
+                                            onUpdateWorld("overviewImages", [
+                                                ...(world.overviewImages || []),
+                                                "",
+                                            ])
+                                        }
                                     >
                                         + 添加概况图片
                                     </button>
@@ -704,79 +818,97 @@ function WorldEditor({
                                 <button
                                     type="button"
                                     className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
-                                    title={(buildWorldCulturePrompts({
-                                        name: world.name,
+                                    title={
+                                        buildWorldCulturePrompts({
+                                            name: world.name,
 
-                                        culture: world.culture,
-                                        cuisine: world.cuisine,
-                                        inhabitants: world.inhabitants,
-                                        language: world.language,
-                                        currency: world.currency,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[0])}
-                                    onClick={() => copyPrompt(buildWorldCulturePrompts({
-                                        name: world.name,
-                                        culture: world.culture,
-                                        cuisine: world.cuisine,
-                                        inhabitants: world.inhabitants,
-                                        language: world.language,
-                                        currency: world.currency,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[0])}
+                                            culture: world.culture,
+                                            cuisine: world.cuisine,
+                                            inhabitants: world.inhabitants,
+                                            language: world.language,
+                                            currency: world.currency,
+                                            tags: world.tags || [],
+                                            visualStyle: world.visualStyle,
+                                        })[0]
+                                    }
+                                    onClick={() =>
+                                        copyPrompt(
+                                            buildWorldCulturePrompts({
+                                                name: world.name,
+                                                culture: world.culture,
+                                                cuisine: world.cuisine,
+                                                inhabitants: world.inhabitants,
+                                                language: world.language,
+                                                currency: world.currency,
+                                                tags: world.tags || [],
+                                                visualStyle: world.visualStyle,
+                                            })[0]
+                                        )
+                                    }
                                 >
                                     复制人文/居民 prompt
                                 </button>
                                 <button
                                     type="button"
                                     className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
-                                    title={(buildWorldCulturePrompts({
-                                        name: world.name,
-                                        culture: world.culture,
-                                        cuisine: world.cuisine,
-                                        inhabitants: world.inhabitants,
-                                        language: world.language,
-                                        currency: world.currency,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[1])}
-                                    onClick={() => copyPrompt(buildWorldCulturePrompts({
-                                        name: world.name,
-                                        culture: world.culture,
-                                        cuisine: world.cuisine,
-                                        inhabitants: world.inhabitants,
-                                        language: world.language,
-                                        currency: world.currency,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[1])}
+                                    title={
+                                        buildWorldCulturePrompts({
+                                            name: world.name,
+                                            culture: world.culture,
+                                            cuisine: world.cuisine,
+                                            inhabitants: world.inhabitants,
+                                            language: world.language,
+                                            currency: world.currency,
+                                            tags: world.tags || [],
+                                            visualStyle: world.visualStyle,
+                                        })[1]
+                                    }
+                                    onClick={() =>
+                                        copyPrompt(
+                                            buildWorldCulturePrompts({
+                                                name: world.name,
+                                                culture: world.culture,
+                                                cuisine: world.cuisine,
+                                                inhabitants: world.inhabitants,
+                                                language: world.language,
+                                                currency: world.currency,
+                                                tags: world.tags || [],
+                                                visualStyle: world.visualStyle,
+                                            })[1]
+                                        )
+                                    }
                                 >
                                     复制美食 prompt
                                 </button>
                                 <button
                                     type="button"
                                     className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15"
-                                    title={(buildWorldCulturePrompts({
-                                        name: world.name,
-                                        culture: world.culture,
-                                        cuisine: world.cuisine,
-                                        inhabitants: world.inhabitants,
-                                        language: world.language,
-                                        currency: world.currency,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[2])}
-                                    onClick={() => copyPrompt(buildWorldCulturePrompts({
-                                        name: world.name,
-                                        culture: world.culture,
-                                        cuisine: world.cuisine,
-                                        inhabitants: world.inhabitants,
-                                        language: world.language,
-                                        currency: world.currency,
-                                        tags: world.tags || [],
-                                        visualStyle: world.visualStyle,
-                                    })[2])}
+                                    title={
+                                        buildWorldCulturePrompts({
+                                            name: world.name,
+                                            culture: world.culture,
+                                            cuisine: world.cuisine,
+                                            inhabitants: world.inhabitants,
+                                            language: world.language,
+                                            currency: world.currency,
+                                            tags: world.tags || [],
+                                            visualStyle: world.visualStyle,
+                                        })[2]
+                                    }
+                                    onClick={() =>
+                                        copyPrompt(
+                                            buildWorldCulturePrompts({
+                                                name: world.name,
+                                                culture: world.culture,
+                                                cuisine: world.cuisine,
+                                                inhabitants: world.inhabitants,
+                                                language: world.language,
+                                                currency: world.currency,
+                                                tags: world.tags || [],
+                                                visualStyle: world.visualStyle,
+                                            })[2]
+                                        )
+                                    }
                                 >
                                     复制语言/交易 prompt
                                 </button>
@@ -787,9 +919,14 @@ function WorldEditor({
                                         key={`culture-${idx}`}
                                         value={url}
                                         onChange={(newUrl) => {
-                                            const next = [...(world.cultureImages || [])];
+                                            const next = [
+                                                ...(world.cultureImages || []),
+                                            ];
                                             next[idx] = newUrl;
-                                            onUpdateWorld('cultureImages', next);
+                                            onUpdateWorld(
+                                                "cultureImages",
+                                                next
+                                            );
                                         }}
                                         prompt={buildWorldCulturePrompt({
                                             name: world.name,
@@ -806,7 +943,12 @@ function WorldEditor({
                                     <button
                                         type="button"
                                         className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white/70 text-sm"
-                                        onClick={() => onUpdateWorld('cultureImages', [...(world.cultureImages || []), ''])}
+                                        onClick={() =>
+                                            onUpdateWorld("cultureImages", [
+                                                ...(world.cultureImages || []),
+                                                "",
+                                            ])
+                                        }
                                     >
                                         + 添加文化图片
                                     </button>
@@ -816,18 +958,25 @@ function WorldEditor({
                         <FormField label="标签">
                             <TagsInput
                                 value={world.tags}
-                                onChange={(tags) => onUpdateWorld('tags', tags)}
+                                onChange={(tags) => onUpdateWorld("tags", tags)}
                             />
                         </FormField>
                         <FormField label="生成状态">
                             <select
                                 value={world.generationStatus}
-                                onChange={(e) => onUpdateWorld('generationStatus', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld(
+                                        "generationStatus",
+                                        e.target.value
+                                    )
+                                }
                                 className="form-input"
                             >
                                 <option value="generating">生成中</option>
                                 <option value="ready">已就绪</option>
-                                <option value="projects_ready">项目已就绪</option>
+                                <option value="projects_ready">
+                                    项目已就绪
+                                </option>
                                 <option value="error">错误</option>
                             </select>
                         </FormField>
@@ -835,12 +984,14 @@ function WorldEditor({
                 )}
 
                 {/* 风土人情 */}
-                {activeSection === 'details' && (
+                {activeSection === "details" && (
                     <FormSection title="风土人情">
                         <FormField label="地理特征">
                             <textarea
                                 value={world.geography}
-                                onChange={(e) => onUpdateWorld('geography', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld("geography", e.target.value)
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -848,7 +999,9 @@ function WorldEditor({
                         <FormField label="气候特征">
                             <textarea
                                 value={world.climate}
-                                onChange={(e) => onUpdateWorld('climate', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld("climate", e.target.value)
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -856,7 +1009,9 @@ function WorldEditor({
                         <FormField label="文化特色">
                             <textarea
                                 value={world.culture}
-                                onChange={(e) => onUpdateWorld('culture', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld("culture", e.target.value)
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -864,7 +1019,9 @@ function WorldEditor({
                         <FormField label="居民特点">
                             <textarea
                                 value={world.inhabitants}
-                                onChange={(e) => onUpdateWorld('inhabitants', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld("inhabitants", e.target.value)
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -872,7 +1029,9 @@ function WorldEditor({
                         <FormField label="特色美食">
                             <textarea
                                 value={world.cuisine}
-                                onChange={(e) => onUpdateWorld('cuisine', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld("cuisine", e.target.value)
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -881,7 +1040,9 @@ function WorldEditor({
                             <input
                                 type="text"
                                 value={world.language}
-                                onChange={(e) => onUpdateWorld('language', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld("language", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
@@ -889,14 +1050,18 @@ function WorldEditor({
                             <input
                                 type="text"
                                 value={world.currency}
-                                onChange={(e) => onUpdateWorld('currency', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateWorld("currency", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
                         <FormField label="特殊规则/禁忌">
                             <textarea
-                                value={world.rules || ''}
-                                onChange={(e) => onUpdateWorld('rules', e.target.value)}
+                                value={world.rules || ""}
+                                onChange={(e) =>
+                                    onUpdateWorld("rules", e.target.value)
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -904,16 +1069,23 @@ function WorldEditor({
                         <FormField label="最佳旅游时间">
                             <input
                                 type="text"
-                                value={world.bestTimeToVisit || ''}
-                                onChange={(e) => onUpdateWorld('bestTimeToVisit', e.target.value)}
+                                value={world.bestTimeToVisit || ""}
+                                onChange={(e) =>
+                                    onUpdateWorld(
+                                        "bestTimeToVisit",
+                                        e.target.value
+                                    )
+                                }
                                 className="form-input"
                             />
                         </FormField>
                         <FormField label="世界纪元/时代">
                             <input
                                 type="text"
-                                value={world.era || ''}
-                                onChange={(e) => onUpdateWorld('era', e.target.value)}
+                                value={world.era || ""}
+                                onChange={(e) =>
+                                    onUpdateWorld("era", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
@@ -921,22 +1093,24 @@ function WorldEditor({
                 )}
 
                 {/* NPC 管理 */}
-                {activeSection === 'npcs' && (
+                {activeSection === "npcs" && (
                     <NPCSection
                         worldId={world.id}
                         npcs={world.npcs || []}
-                        onNPCsChange={(npcs) => onUpdateWorld('npcs', npcs)}
+                        onNPCsChange={(npcs) => onUpdateWorld("npcs", npcs)}
                     />
                 )}
 
                 {/* 旅行器 */}
-                {activeSection === 'vehicle' && world.travelVehicle && (
+                {activeSection === "vehicle" && world.travelVehicle && (
                     <FormSection title="旅行器">
                         <FormField label="名称" required>
                             <input
                                 type="text"
                                 value={world.travelVehicle.name}
-                                onChange={(e) => onUpdateVehicle('name', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateVehicle("name", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
@@ -944,14 +1118,21 @@ function WorldEditor({
                             <input
                                 type="text"
                                 value={world.travelVehicle.type}
-                                onChange={(e) => onUpdateVehicle('type', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateVehicle("type", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
                         <FormField label="简介">
                             <textarea
                                 value={world.travelVehicle.description}
-                                onChange={(e) => onUpdateVehicle('description', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateVehicle(
+                                        "description",
+                                        e.target.value
+                                    )
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -959,7 +1140,12 @@ function WorldEditor({
                         <FormField label="详细描述">
                             <textarea
                                 value={world.travelVehicle.detailedDescription}
-                                onChange={(e) => onUpdateVehicle('detailedDescription', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateVehicle(
+                                        "detailedDescription",
+                                        e.target.value
+                                    )
+                                }
                                 rows={5}
                                 className="form-input"
                             />
@@ -967,13 +1153,20 @@ function WorldEditor({
                         <FormField label="图片">
                             <MediaUpload
                                 value={world.travelVehicle.image}
-                                onChange={(url) => onUpdateVehicle('image', url)}
-                                prompt={buildTravelVehiclePrompt({
-                                    name: world.travelVehicle.name,
-                                    type: world.travelVehicle.type,
-                                    appearance: world.travelVehicle.appearance,
-                                    abilities: world.travelVehicle.abilities || [],
-                                }, world.name)}
+                                onChange={(url) =>
+                                    onUpdateVehicle("image", url)
+                                }
+                                prompt={buildTravelVehiclePrompt(
+                                    {
+                                        name: world.travelVehicle.name,
+                                        type: world.travelVehicle.type,
+                                        appearance:
+                                            world.travelVehicle.appearance,
+                                        abilities:
+                                            world.travelVehicle.abilities || [],
+                                    },
+                                    world.name
+                                )}
                             />
                         </FormField>
                         <div className="grid grid-cols-2 gap-4">
@@ -981,7 +1174,12 @@ function WorldEditor({
                                 <input
                                     type="number"
                                     value={world.travelVehicle.capacity}
-                                    onChange={(e) => onUpdateVehicle('capacity', parseInt(e.target.value))}
+                                    onChange={(e) =>
+                                        onUpdateVehicle(
+                                            "capacity",
+                                            parseInt(e.target.value)
+                                        )
+                                    }
                                     className="form-input"
                                 />
                             </FormField>
@@ -991,7 +1189,12 @@ function WorldEditor({
                                     min={1}
                                     max={5}
                                     value={world.travelVehicle.comfortLevel}
-                                    onChange={(e) => onUpdateVehicle('comfortLevel', parseInt(e.target.value))}
+                                    onChange={(e) =>
+                                        onUpdateVehicle(
+                                            "comfortLevel",
+                                            parseInt(e.target.value)
+                                        )
+                                    }
                                     className="form-input"
                                 />
                             </FormField>
@@ -1000,14 +1203,21 @@ function WorldEditor({
                             <input
                                 type="text"
                                 value={world.travelVehicle.speed}
-                                onChange={(e) => onUpdateVehicle('speed', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateVehicle("speed", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
                         <FormField label="外观描述">
                             <textarea
                                 value={world.travelVehicle.appearance}
-                                onChange={(e) => onUpdateVehicle('appearance', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateVehicle(
+                                        "appearance",
+                                        e.target.value
+                                    )
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -1015,7 +1225,12 @@ function WorldEditor({
                         <FormField label="内部设施">
                             <textarea
                                 value={world.travelVehicle.interiorDescription}
-                                onChange={(e) => onUpdateVehicle('interiorDescription', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateVehicle(
+                                        "interiorDescription",
+                                        e.target.value
+                                    )
+                                }
                                 rows={3}
                                 className="form-input"
                             />
@@ -1023,18 +1238,29 @@ function WorldEditor({
                         <FormField label="特殊能力">
                             <TagsInput
                                 value={world.travelVehicle.abilities}
-                                onChange={(abilities) => onUpdateVehicle('abilities', abilities)}
+                                onChange={(abilities) =>
+                                    onUpdateVehicle("abilities", abilities)
+                                }
                             />
                         </FormField>
                         <FormField label="生成状态">
                             <select
                                 value={world.travelVehicle.generationStatus}
-                                onChange={(e) => onUpdateVehicle('generationStatus', e.target.value)}
+                                onChange={(e) =>
+                                    onUpdateVehicle(
+                                        "generationStatus",
+                                        e.target.value
+                                    )
+                                }
                                 className="form-input"
                             >
                                 <option value="pending">待生成</option>
-                                <option value="generating_text">生成文本中</option>
-                                <option value="generating_image">生成图片中</option>
+                                <option value="generating_text">
+                                    生成文本中
+                                </option>
+                                <option value="generating_image">
+                                    生成图片中
+                                </option>
                                 <option value="ready">已就绪</option>
                                 <option value="error">错误</option>
                             </select>
@@ -1043,34 +1269,55 @@ function WorldEditor({
                 )}
 
                 {/* 区域 */}
-                {activeSection === 'projects' && (
+                {activeSection === "projects" && (
                     <div className="space-y-4">
-                        <h2 className="text-xl font-bold">区域 ({world.travelProjects?.length || 0})</h2>
+                        <h2 className="text-xl font-bold">
+                            区域 ({world.travelProjects?.length || 0})
+                        </h2>
                         {world.travelProjects?.map((project, projectIndex) => (
-                            <div key={project.id} className="border border-white/10 rounded-xl overflow-hidden">
+                            <div
+                                key={project.id}
+                                className="border border-white/10 rounded-xl overflow-hidden"
+                            >
                                 {/* 区域标题栏 */}
                                 <button
                                     onClick={() => toggleProject(project.id)}
                                     className="w-full px-6 py-4 bg-white/5 flex items-center justify-between hover:bg-white/10 transition-colors"
                                 >
                                     <div className="flex items-center gap-3">
-                                        <span className="text-white/40">{projectIndex + 1}.</span>
-                                        <span className="font-medium">{project.name}</span>
-                                        <span className={`px-2 py-0.5 rounded text-xs ${project.generationStatus === 'ready'
-                                                ? 'bg-green-500/20 text-green-400'
-                                                : 'bg-yellow-500/20 text-yellow-400'
-                                            }`}>
+                                        <span className="text-white/40">
+                                            {projectIndex + 1}.
+                                        </span>
+                                        <span className="font-medium">
+                                            {project.name}
+                                        </span>
+                                        <span
+                                            className={`px-2 py-0.5 rounded text-xs ${
+                                                project.generationStatus ===
+                                                "ready"
+                                                    ? "bg-green-500/20 text-green-400"
+                                                    : "bg-yellow-500/20 text-yellow-400"
+                                            }`}
+                                        >
                                             {project.generationStatus}
                                         </span>
                                     </div>
                                     <svg
-                                        className={`w-5 h-5 text-white/40 transition-transform ${expandedProjects.has(project.id) ? 'rotate-180' : ''
-                                            }`}
+                                        className={`w-5 h-5 text-white/40 transition-transform ${
+                                            expandedProjects.has(project.id)
+                                                ? "rotate-180"
+                                                : ""
+                                        }`}
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
                                     >
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M19 9l-7 7-7-7"
+                                        />
                                     </svg>
                                 </button>
 
@@ -1083,28 +1330,58 @@ function WorldEditor({
                                                 <input
                                                     type="text"
                                                     value={project.name}
-                                                    onChange={(e) => onUpdateProject(project.id, 'name', e.target.value)}
+                                                    onChange={(e) =>
+                                                        onUpdateProject(
+                                                            project.id,
+                                                            "name",
+                                                            e.target.value
+                                                        )
+                                                    }
                                                     className="form-input"
                                                 />
                                             </FormField>
                                             <FormField label="生成状态">
                                                 <select
-                                                    value={project.generationStatus}
-                                                    onChange={(e) => onUpdateProject(project.id, 'generationStatus', e.target.value)}
+                                                    value={
+                                                        project.generationStatus
+                                                    }
+                                                    onChange={(e) =>
+                                                        onUpdateProject(
+                                                            project.id,
+                                                            "generationStatus",
+                                                            e.target.value
+                                                        )
+                                                    }
                                                     className="form-input"
                                                 >
-                                                    <option value="pending">待生成</option>
-                                                    <option value="generating_details">生成详情中</option>
-                                                    <option value="generating_images">生成图片中</option>
-                                                    <option value="ready">已就绪</option>
-                                                    <option value="error">错误</option>
+                                                    <option value="pending">
+                                                        待生成
+                                                    </option>
+                                                    <option value="generating_details">
+                                                        生成详情中
+                                                    </option>
+                                                    <option value="generating_images">
+                                                        生成图片中
+                                                    </option>
+                                                    <option value="ready">
+                                                        已就绪
+                                                    </option>
+                                                    <option value="error">
+                                                        错误
+                                                    </option>
                                                 </select>
                                             </FormField>
                                         </div>
                                         <FormField label="区域描述">
                                             <textarea
                                                 value={project.description}
-                                                onChange={(e) => onUpdateProject(project.id, 'description', e.target.value)}
+                                                onChange={(e) =>
+                                                    onUpdateProject(
+                                                        project.id,
+                                                        "description",
+                                                        e.target.value
+                                                    )
+                                                }
                                                 rows={3}
                                                 className="form-input"
                                             />
@@ -1112,18 +1389,35 @@ function WorldEditor({
                                         <FormField label="封面图片">
                                             <MediaUpload
                                                 value={project.coverImage}
-                                                onChange={(url) => onUpdateProject(project.id, 'coverImage', url)}
-                                                prompt={buildProjectCoverPrompt({
-                                                    name: project.name,
-                                                    description: project.description,
-                                                    tags: project.tags || [],
-                                                }, world.name)}
+                                                onChange={(url) =>
+                                                    onUpdateProject(
+                                                        project.id,
+                                                        "coverImage",
+                                                        url
+                                                    )
+                                                }
+                                                prompt={buildProjectCoverPrompt(
+                                                    {
+                                                        name: project.name,
+                                                        description:
+                                                            project.description,
+                                                        tags:
+                                                            project.tags || [],
+                                                    },
+                                                    world.name
+                                                )}
                                             />
                                         </FormField>
                                         <FormField label="背景音乐（URL 或上传音频，可选）">
                                             <MediaUpload
                                                 value={project.bgmUrl}
-                                                onChange={(url) => onUpdateProject(project.id, 'bgmUrl', url)}
+                                                onChange={(url) =>
+                                                    onUpdateProject(
+                                                        project.id,
+                                                        "bgmUrl",
+                                                        url
+                                                    )
+                                                }
                                                 accept="audio/*"
                                                 placeholder="输入音乐 URL 或上传音频"
                                                 uploadLabel="上传音乐"
@@ -1135,7 +1429,15 @@ function WorldEditor({
                                                 <input
                                                     type="number"
                                                     value={project.duration}
-                                                    onChange={(e) => onUpdateProject(project.id, 'duration', parseInt(e.target.value))}
+                                                    onChange={(e) =>
+                                                        onUpdateProject(
+                                                            project.id,
+                                                            "duration",
+                                                            parseInt(
+                                                                e.target.value
+                                                            )
+                                                        )
+                                                    }
                                                     className="form-input"
                                                 />
                                             </FormField>
@@ -1145,7 +1447,15 @@ function WorldEditor({
                                                     min={1}
                                                     max={5}
                                                     value={project.difficulty}
-                                                    onChange={(e) => onUpdateProject(project.id, 'difficulty', parseInt(e.target.value))}
+                                                    onChange={(e) =>
+                                                        onUpdateProject(
+                                                            project.id,
+                                                            "difficulty",
+                                                            parseInt(
+                                                                e.target.value
+                                                            )
+                                                        )
+                                                    }
                                                     className="form-input"
                                                 />
                                             </FormField>
@@ -1153,7 +1463,13 @@ function WorldEditor({
                                                 <input
                                                     type="text"
                                                     value={project.suitableFor}
-                                                    onChange={(e) => onUpdateProject(project.id, 'suitableFor', e.target.value)}
+                                                    onChange={(e) =>
+                                                        onUpdateProject(
+                                                            project.id,
+                                                            "suitableFor",
+                                                            e.target.value
+                                                        )
+                                                    }
                                                     className="form-input"
                                                 />
                                             </FormField>
@@ -1161,48 +1477,107 @@ function WorldEditor({
                                         <FormField label="标签">
                                             <TagsInput
                                                 value={project.tags}
-                                                onChange={(tags) => onUpdateProject(project.id, 'tags', tags)}
+                                                onChange={(tags) =>
+                                                    onUpdateProject(
+                                                        project.id,
+                                                        "tags",
+                                                        tags
+                                                    )
+                                                }
                                             />
                                         </FormField>
 
                                         {/* 场景列表 */}
                                         <div className="pt-4 border-t border-white/10">
-                                            <h4 className="font-medium mb-4">场景 ({project.spots?.length || 0})</h4>
+                                            <h4 className="font-medium mb-4">
+                                                场景 (
+                                                {project.spots?.length || 0})
+                                            </h4>
                                             <div className="space-y-3">
-                                                {project.spots?.map((spot, spotIndex) => (
-                                                    <div key={spot.id} className="border border-white/10 rounded-lg overflow-hidden">
-                                                        <button
-                                                            onClick={() => toggleSpot(spot.id)}
-                                                            className="w-full px-4 py-3 bg-white/5 flex items-center justify-between hover:bg-white/10 transition-colors"
+                                                {project.spots?.map(
+                                                    (spot, spotIndex) => (
+                                                        <div
+                                                            key={spot.id}
+                                                            className="border border-white/10 rounded-lg overflow-hidden"
                                                         >
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-white/40 text-sm">{spotIndex + 1}.</span>
-                                                                <span className="text-sm">{spot.name}</span>
-                                                            </div>
-                                                            <svg
-                                                                className={`w-4 h-4 text-white/40 transition-transform ${expandedSpots.has(spot.id) ? 'rotate-180' : ''
-                                                                    }`}
-                                                                fill="none"
-                                                                stroke="currentColor"
-                                                                viewBox="0 0 24 24"
+                                                            <button
+                                                                onClick={() =>
+                                                                    toggleSpot(
+                                                                        spot.id
+                                                                    )
+                                                                }
+                                                                className="w-full px-4 py-3 bg-white/5 flex items-center justify-between hover:bg-white/10 transition-colors"
                                                             >
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                            </svg>
-                                                        </button>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-white/40 text-sm">
+                                                                        {spotIndex +
+                                                                            1}
+                                                                        .
+                                                                    </span>
+                                                                    <span className="text-sm">
+                                                                        {
+                                                                            spot.name
+                                                                        }
+                                                                    </span>
+                                                                </div>
+                                                                <svg
+                                                                    className={`w-4 h-4 text-white/40 transition-transform ${
+                                                                        expandedSpots.has(
+                                                                            spot.id
+                                                                        )
+                                                                            ? "rotate-180"
+                                                                            : ""
+                                                                    }`}
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    viewBox="0 0 24 24"
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={
+                                                                            2
+                                                                        }
+                                                                        d="M19 9l-7 7-7-7"
+                                                                    />
+                                                                </svg>
+                                                            </button>
 
-                                                        {expandedSpots.has(spot.id) && (
-                                                            <div className="p-4 space-y-4 border-t border-white/10">
-                                                                <SpotEditor
-                                                                    spot={spot}
-                                                                    worldName={world.name}
-                                                                    spotId={spot.id}
-                                                                    worldNpcs={world.npcs || []}
-                                                                    onUpdate={(field, value) => onUpdateSpot(project.id, spot.id, field, value)}
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
+                                                            {expandedSpots.has(
+                                                                spot.id
+                                                            ) && (
+                                                                <div className="p-4 space-y-4 border-t border-white/10">
+                                                                    <SpotEditor
+                                                                        spot={
+                                                                            spot
+                                                                        }
+                                                                        worldName={
+                                                                            world.name
+                                                                        }
+                                                                        spotId={
+                                                                            spot.id
+                                                                        }
+                                                                        worldNpcs={
+                                                                            world.npcs ||
+                                                                            []
+                                                                        }
+                                                                        onUpdate={(
+                                                                            field,
+                                                                            value
+                                                                        ) =>
+                                                                            onUpdateSpot(
+                                                                                project.id,
+                                                                                spot.id,
+                                                                                field,
+                                                                                value
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -1224,21 +1599,29 @@ interface SpotEditorProps {
     spot: Spot;
     worldName: string;
     spotId: string;
-    worldNpcs: SpotNPC[];  // 世界级 NPC 列表，用于下拉选择
+    worldNpcs: SpotNPC[]; // 世界级 NPC 列表，用于下拉选择
     onUpdate: (field: keyof Spot, value: any) => void;
 }
 
-function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditorProps) {
+function SpotEditor({
+    spot,
+    worldName,
+    spotId,
+    worldNpcs,
+    onUpdate,
+}: SpotEditorProps) {
     const [expandedNpcs, setExpandedNpcs] = useState<Set<string>>(new Set());
-    const [selectedNpcToAdd, setSelectedNpcToAdd] = useState<string>('');
+    const [selectedNpcToAdd, setSelectedNpcToAdd] = useState<string>("");
 
     // 获取场景已关联的 NPC
     const linkedNpcIds = spot.npcIds || [];
-    const linkedNpcs = worldNpcs.filter(npc => linkedNpcIds.includes(npc.id));
-    const availableNpcs = worldNpcs.filter(npc => !linkedNpcIds.includes(npc.id));
+    const linkedNpcs = worldNpcs.filter((npc) => linkedNpcIds.includes(npc.id));
+    const availableNpcs = worldNpcs.filter(
+        (npc) => !linkedNpcIds.includes(npc.id)
+    );
 
     const toggleNpc = (npcId: string) => {
-        setExpandedNpcs(prev => {
+        setExpandedNpcs((prev) => {
             const next = new Set(prev);
             if (next.has(npcId)) {
                 next.delete(npcId);
@@ -1252,13 +1635,13 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
     const handleAddNpc = () => {
         if (!selectedNpcToAdd) return;
         const newNpcIds = [...linkedNpcIds, selectedNpcToAdd];
-        onUpdate('npcIds', newNpcIds);
-        setSelectedNpcToAdd('');
+        onUpdate("npcIds", newNpcIds);
+        setSelectedNpcToAdd("");
     };
 
     const handleRemoveNpc = (npcIdToRemove: string) => {
-        const newNpcIds = linkedNpcIds.filter(id => id !== npcIdToRemove);
-        onUpdate('npcIds', newNpcIds);
+        const newNpcIds = linkedNpcIds.filter((id) => id !== npcIdToRemove);
+        onUpdate("npcIds", newNpcIds);
     };
 
     return (
@@ -1267,14 +1650,14 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
                 <input
                     type="text"
                     value={spot.name}
-                    onChange={(e) => onUpdate('name', e.target.value)}
+                    onChange={(e) => onUpdate("name", e.target.value)}
                     className="form-input"
                 />
             </FormField>
             <FormField label="简介">
                 <textarea
                     value={spot.description}
-                    onChange={(e) => onUpdate('description', e.target.value)}
+                    onChange={(e) => onUpdate("description", e.target.value)}
                     rows={2}
                     className="form-input"
                 />
@@ -1282,7 +1665,9 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
             <FormField label="详细描述">
                 <textarea
                     value={spot.detailedDescription}
-                    onChange={(e) => onUpdate('detailedDescription', e.target.value)}
+                    onChange={(e) =>
+                        onUpdate("detailedDescription", e.target.value)
+                    }
                     rows={4}
                     className="form-input"
                 />
@@ -1290,18 +1675,21 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
             <FormField label="场景图片">
                 <MediaUpload
                     value={spot.image}
-                    onChange={(url) => onUpdate('image', url)}
-                    prompt={buildSpotImagePrompt({
-                        name: spot.name,
-                        description: spot.description,
-                        highlights: spot.highlights || [],
-                    }, worldName)}
+                    onChange={(url) => onUpdate("image", url)}
+                    prompt={buildSpotImagePrompt(
+                        {
+                            name: spot.name,
+                            description: spot.description,
+                            highlights: spot.highlights || [],
+                        },
+                        worldName
+                    )}
                 />
             </FormField>
             <FormField label="历史/传说">
                 <textarea
                     value={spot.story}
-                    onChange={(e) => onUpdate('story', e.target.value)}
+                    onChange={(e) => onUpdate("story", e.target.value)}
                     rows={3}
                     className="form-input"
                 />
@@ -1309,13 +1697,15 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
             <FormField label="亮点">
                 <TagsInput
                     value={spot.highlights}
-                    onChange={(highlights) => onUpdate('highlights', highlights)}
+                    onChange={(highlights) =>
+                        onUpdate("highlights", highlights)
+                    }
                 />
             </FormField>
             <FormField label="参观建议">
                 <textarea
-                    value={spot.visitTips || ''}
-                    onChange={(e) => onUpdate('visitTips', e.target.value)}
+                    value={spot.visitTips || ""}
+                    onChange={(e) => onUpdate("visitTips", e.target.value)}
                     rows={2}
                     className="form-input"
                 />
@@ -1325,14 +1715,21 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
                     <input
                         type="number"
                         value={spot.suggestedDuration}
-                        onChange={(e) => onUpdate('suggestedDuration', parseInt(e.target.value))}
+                        onChange={(e) =>
+                            onUpdate(
+                                "suggestedDuration",
+                                parseInt(e.target.value)
+                            )
+                        }
                         className="form-input"
                     />
                 </FormField>
                 <FormField label="生成状态">
                     <select
                         value={spot.generationStatus}
-                        onChange={(e) => onUpdate('generationStatus', e.target.value)}
+                        onChange={(e) =>
+                            onUpdate("generationStatus", e.target.value)
+                        }
                         className="form-input"
                     >
                         <option value="pending">待生成</option>
@@ -1346,18 +1743,22 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
 
             {/* NPC 关联管理 */}
             <div className="pt-4 border-t border-white/10">
-                <h5 className="text-sm font-medium mb-3 text-white/80">关联 NPC ({linkedNpcs.length})</h5>
+                <h5 className="text-sm font-medium mb-3 text-white/80">
+                    关联 NPC ({linkedNpcs.length})
+                </h5>
 
                 {/* 添加 NPC 下拉选择 */}
                 {availableNpcs.length > 0 && (
                     <div className="flex gap-2 mb-4">
                         <select
                             value={selectedNpcToAdd}
-                            onChange={(e) => setSelectedNpcToAdd(e.target.value)}
+                            onChange={(e) =>
+                                setSelectedNpcToAdd(e.target.value)
+                            }
                             className="form-input flex-1"
                         >
                             <option value="">选择要关联的 NPC...</option>
-                            {availableNpcs.map(npc => (
+                            {availableNpcs.map((npc) => (
                                 <option key={npc.id} value={npc.id}>
                                     {npc.name} - {npc.role}
                                 </option>
@@ -1374,39 +1775,61 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
                 )}
 
                 {worldNpcs.length === 0 && (
-                    <p className="text-white/40 text-sm italic">该世界还没有创建 NPC，请先在「NPC 管理」中添加</p>
+                    <p className="text-white/40 text-sm italic">
+                        该世界还没有创建 NPC，请先在「NPC 管理」中添加
+                    </p>
                 )}
 
                 {/* 已关联的 NPC 列表 */}
                 {linkedNpcs.length > 0 ? (
                     <div className="space-y-2">
-                        {linkedNpcs.map(npc => (
-                            <div key={npc.id} className="border border-white/10 rounded-lg overflow-hidden">
+                        {linkedNpcs.map((npc) => (
+                            <div
+                                key={npc.id}
+                                className="border border-white/10 rounded-lg overflow-hidden"
+                            >
                                 <button
                                     onClick={() => toggleNpc(npc.id)}
                                     className="w-full px-3 py-2 bg-white/5 flex items-center justify-between hover:bg-white/10 transition-colors text-sm"
                                 >
                                     <div className="flex items-center gap-2">
                                         {npc.sprite && (
-                                            <img src={npc.sprite} alt={npc.name} className="w-8 h-8 rounded-full object-cover" />
+                                            <img
+                                                src={npc.sprite}
+                                                alt={npc.name}
+                                                className="w-8 h-8 rounded-full object-cover"
+                                            />
                                         )}
-                                        <span>{npc.name} - {npc.role}</span>
+                                        <span>
+                                            {npc.name} - {npc.role}
+                                        </span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span
-                                            onClick={(e) => { e.stopPropagation(); handleRemoveNpc(npc.id); }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRemoveNpc(npc.id);
+                                            }}
                                             className="text-red-400 hover:text-red-300 cursor-pointer text-xs"
                                         >
                                             移除
                                         </span>
                                         <svg
-                                            className={`w-4 h-4 text-white/40 transition-transform ${expandedNpcs.has(npc.id) ? 'rotate-180' : ''
-                                                }`}
+                                            className={`w-4 h-4 text-white/40 transition-transform ${
+                                                expandedNpcs.has(npc.id)
+                                                    ? "rotate-180"
+                                                    : ""
+                                            }`}
                                             fill="none"
                                             stroke="currentColor"
                                             viewBox="0 0 24 24"
                                         >
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M19 9l-7 7-7-7"
+                                            />
                                         </svg>
                                     </div>
                                 </button>
@@ -1425,7 +1848,11 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
                         ))}
                     </div>
                 ) : (
-                    worldNpcs.length > 0 && <p className="text-white/40 text-sm">尚未关联任何 NPC</p>
+                    worldNpcs.length > 0 && (
+                        <p className="text-white/40 text-sm">
+                            尚未关联任何 NPC
+                        </p>
+                    )
                 )}
             </div>
         </>
@@ -1443,10 +1870,16 @@ interface NpcEditorProps {
     spotId: string;
     onUpdate: (field: keyof SpotNPC, value: any) => void;
 }
-function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProps) {
+function NpcEditor({
+    npc,
+    worldName,
+    spotName,
+    spotId,
+    onUpdate,
+}: NpcEditorProps) {
     const dialogTypes: Array<{ type: DialogScriptType; label: string }> = [
-        { type: 'entry', label: '入场对话 (entry)' },
-        { type: 'chat', label: '闲聊对话 (chat)' },
+        { type: "entry", label: "入场对话 (entry)" },
+        { type: "chat", label: "闲聊对话 (chat)" },
     ];
 
     const emptyScripts: Record<DialogScriptType, DialogScript | null> = {
@@ -1457,17 +1890,22 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
         farewell: null,
     };
 
-    const [dialogScripts, setDialogScripts] = useState<Record<DialogScriptType, DialogScript | null>>(emptyScripts);
+    const [dialogScripts, setDialogScripts] =
+        useState<Record<DialogScriptType, DialogScript | null>>(emptyScripts);
     const [loadingDialogs, setLoadingDialogs] = useState(false);
     const [savingType, setSavingType] = useState<DialogScriptType | null>(null);
 
     const loadDialogScripts = async () => {
         try {
             setLoadingDialogs(true);
-            const res = await fetch(`/api/admin/dialog-scripts?npcId=${npc.id}`);
+            const res = await fetch(
+                `/api/admin/dialog-scripts?npcId=${npc.id}`
+            );
             const data = await res.json();
             if (data.success && data.scripts) {
-                const next: Record<DialogScriptType, DialogScript | null> = { ...emptyScripts };
+                const next: Record<DialogScriptType, DialogScript | null> = {
+                    ...emptyScripts,
+                };
                 for (const script of data.scripts as DialogScript[]) {
                     next[script.type] = script;
                 }
@@ -1483,22 +1921,30 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [npc.id]);
 
-    const updateScriptState = (type: DialogScriptType, updater: (prev: DialogScript | null) => DialogScript | null) => {
-        setDialogScripts(prev => ({ ...prev, [type]: updater(prev[type]) }));
+    const updateScriptState = (
+        type: DialogScriptType,
+        updater: (prev: DialogScript | null) => DialogScript | null
+    ) => {
+        setDialogScripts((prev) => ({ ...prev, [type]: updater(prev[type]) }));
     };
 
-    const handleLineChange = (type: DialogScriptType, index: number, field: keyof DialogLine, value: string) => {
+    const handleLineChange = (
+        type: DialogScriptType,
+        index: number,
+        field: keyof DialogLine,
+        value: string
+    ) => {
         updateScriptState(type, (prev) => {
             const base: DialogScript = prev ?? {
-                id: '',
+                id: "",
                 npcId: npc.id,
                 spotId,
                 type,
                 lines: [],
                 order: 0,
                 isActive: true,
-                createdAt: '',
-                updatedAt: '',
+                createdAt: "",
+                updatedAt: "",
             };
             const lines = [...base.lines];
             lines[index] = { ...lines[index], [field]: value } as DialogLine;
@@ -1509,19 +1955,22 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
     const handleAddLine = (type: DialogScriptType) => {
         updateScriptState(type, (prev) => {
             const base: DialogScript = prev ?? {
-                id: '',
+                id: "",
                 npcId: npc.id,
                 spotId,
                 type,
                 lines: [],
                 order: 0,
                 isActive: true,
-                createdAt: '',
-                updatedAt: '',
+                createdAt: "",
+                updatedAt: "",
             };
             return {
                 ...base,
-                lines: [...(base.lines || []), { speaker: npc.name, text: '', emotion: 'neutral' }],
+                lines: [
+                    ...(base.lines || []),
+                    { speaker: npc.name, text: "", emotion: "neutral" },
+                ],
             };
         });
     };
@@ -1538,7 +1987,7 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
     const handleSave = async (type: DialogScriptType) => {
         const script = dialogScripts[type];
         if (!script || script.lines.length === 0) {
-            alert('请先填写至少一行对话');
+            alert("请先填写至少一行对话");
             return;
         }
 
@@ -1555,22 +2004,29 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
                 isActive: script.isActive ?? true,
             };
 
-            const res = await fetch(hasId ? `/api/admin/dialog-scripts/${script.id}` : '/api/admin/dialog-scripts', {
-                method: hasId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(hasId ? { ...script, ...payload } : payload),
-            });
+            const res = await fetch(
+                hasId
+                    ? `/api/admin/dialog-scripts/${script.id}`
+                    : "/api/admin/dialog-scripts",
+                {
+                    method: hasId ? "PUT" : "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(
+                        hasId ? { ...script, ...payload } : payload
+                    ),
+                }
+            );
 
             const data = await res.json();
             if (data.success) {
                 const saved: DialogScript = data.script;
-                setDialogScripts(prev => ({ ...prev, [type]: saved }));
+                setDialogScripts((prev) => ({ ...prev, [type]: saved }));
             } else {
-                alert(data.error || '保存失败');
+                alert(data.error || "保存失败");
             }
         } catch (err) {
-            console.error('保存对话脚本失败', err);
-            alert('保存对话脚本失败');
+            console.error("保存对话脚本失败", err);
+            alert("保存对话脚本失败");
         } finally {
             setSavingType(null);
         }
@@ -1583,7 +2039,7 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
                     <input
                         type="text"
                         value={npc.name}
-                        onChange={(e) => onUpdate('name', e.target.value)}
+                        onChange={(e) => onUpdate("name", e.target.value)}
                         className="form-input"
                     />
                 </FormField>
@@ -1591,7 +2047,7 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
                     <input
                         type="text"
                         value={npc.role}
-                        onChange={(e) => onUpdate('role', e.target.value)}
+                        onChange={(e) => onUpdate("role", e.target.value)}
                         className="form-input"
                     />
                 </FormField>
@@ -1599,7 +2055,7 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
             <FormField label="简介" small>
                 <textarea
                     value={npc.description}
-                    onChange={(e) => onUpdate('description', e.target.value)}
+                    onChange={(e) => onUpdate("description", e.target.value)}
                     rows={2}
                     className="form-input"
                 />
@@ -1607,7 +2063,7 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
             <FormField label="背景故事" small>
                 <textarea
                     value={npc.backstory}
-                    onChange={(e) => onUpdate('backstory', e.target.value)}
+                    onChange={(e) => onUpdate("backstory", e.target.value)}
                     rows={3}
                     className="form-input"
                 />
@@ -1615,7 +2071,7 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
             <FormField label="外貌描述" small>
                 <textarea
                     value={npc.appearance}
-                    onChange={(e) => onUpdate('appearance', e.target.value)}
+                    onChange={(e) => onUpdate("appearance", e.target.value)}
                     rows={2}
                     className="form-input"
                 />
@@ -1624,32 +2080,38 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
                 <input
                     type="text"
                     value={npc.speakingStyle}
-                    onChange={(e) => onUpdate('speakingStyle', e.target.value)}
+                    onChange={(e) => onUpdate("speakingStyle", e.target.value)}
                     className="form-input"
                 />
             </FormField>
             <FormField label="性格特点" small>
                 <TagsInput
                     value={npc.personality}
-                    onChange={(personality) => onUpdate('personality', personality)}
+                    onChange={(personality) =>
+                        onUpdate("personality", personality)
+                    }
                 />
             </FormField>
             <FormField label="立绘图片" small>
                 <MediaUpload
                     value={npc.sprite}
-                    onChange={(url) => onUpdate('sprite', url)}
-                    prompt={buildNPCPortraitPrompt({
-                        name: npc.name,
-                        role: npc.role,
-                        appearance: npc.appearance,
-                        personality: npc.personality || [],
-                    }) + `\nWorld: ${worldName}\nSpot: ${spotName}`}
+                    onChange={(url) => onUpdate("sprite", url)}
+                    prompt={
+                        buildNPCPortraitPrompt({
+                            name: npc.name,
+                            role: npc.role,
+                            appearance: npc.appearance,
+                            personality: npc.personality || [],
+                        }) + `\nWorld: ${worldName}\nSpot: ${spotName}`
+                    }
                 />
             </FormField>
             <FormField label="生成状态" small>
                 <select
                     value={npc.generationStatus}
-                    onChange={(e) => onUpdate('generationStatus', e.target.value)}
+                    onChange={(e) =>
+                        onUpdate("generationStatus", e.target.value)
+                    }
                     className="form-input"
                 >
                     <option value="pending">待生成</option>
@@ -1662,15 +2124,24 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
 
             <div className="pt-3 border-t border-white/10 space-y-4">
                 <div className="flex items-center justify-between">
-                    <h6 className="text-sm font-medium text-white/80">对话脚本</h6>
-                    {loadingDialogs && <span className="text-xs text-white/50">加载中...</span>}
+                    <h6 className="text-sm font-medium text-white/80">
+                        对话脚本
+                    </h6>
+                    {loadingDialogs && (
+                        <span className="text-xs text-white/50">加载中...</span>
+                    )}
                 </div>
                 {dialogTypes.map(({ type, label }) => {
                     const script = dialogScripts[type];
                     return (
-                        <div key={type} className="border border-white/10 rounded-lg p-3 space-y-2">
+                        <div
+                            key={type}
+                            className="border border-white/10 rounded-lg p-3 space-y-2"
+                        >
                             <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">{label}</span>
+                                <span className="text-sm font-medium">
+                                    {label}
+                                </span>
                                 <button
                                     onClick={() => handleAddLine(type)}
                                     className="text-xs px-2 py-1 bg-white/10 rounded hover:bg-white/20"
@@ -1679,27 +2150,53 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
                                 </button>
                             </div>
                             {(script?.lines || []).map((line, idx) => (
-                                <div key={`${type}-line-${idx}`} className="grid grid-cols-12 gap-2 items-center">
+                                <div
+                                    key={`${type}-line-${idx}`}
+                                    className="grid grid-cols-12 gap-2 items-center"
+                                >
                                     <input
                                         className="form-input col-span-2"
                                         placeholder="Speaker"
                                         value={line.speaker}
-                                        onChange={(e) => handleLineChange(type, idx, 'speaker', e.target.value)}
+                                        onChange={(e) =>
+                                            handleLineChange(
+                                                type,
+                                                idx,
+                                                "speaker",
+                                                e.target.value
+                                            )
+                                        }
                                     />
                                     <input
                                         className="form-input col-span-8"
                                         placeholder="Text"
                                         value={line.text}
-                                        onChange={(e) => handleLineChange(type, idx, 'text', e.target.value)}
+                                        onChange={(e) =>
+                                            handleLineChange(
+                                                type,
+                                                idx,
+                                                "text",
+                                                e.target.value
+                                            )
+                                        }
                                     />
                                     <input
                                         className="form-input col-span-1"
                                         placeholder="Emotion"
-                                        value={line.emotion || ''}
-                                        onChange={(e) => handleLineChange(type, idx, 'emotion', e.target.value)}
+                                        value={line.emotion || ""}
+                                        onChange={(e) =>
+                                            handleLineChange(
+                                                type,
+                                                idx,
+                                                "emotion",
+                                                e.target.value
+                                            )
+                                        }
                                     />
                                     <button
-                                        onClick={() => handleRemoveLine(type, idx)}
+                                        onClick={() =>
+                                            handleRemoveLine(type, idx)
+                                        }
                                         className="text-xs text-red-300 hover:text-red-200"
                                     >
                                         删除
@@ -1707,7 +2204,9 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
                                 </div>
                             ))}
                             {(script?.lines?.length || 0) === 0 && (
-                                <div className="text-xs text-white/50">暂无内容，点击上方“添加行”开始编辑。</div>
+                                <div className="text-xs text-white/50">
+                                    暂无内容，点击上方“添加行”开始编辑。
+                                </div>
                             )}
                             <div className="flex items-center justify-end gap-3 pt-2">
                                 <label className="text-xs text-white/60 flex items-center gap-1">
@@ -1716,14 +2215,36 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
                                         type="number"
                                         className="form-input w-20"
                                         value={script?.order ?? 0}
-                                        onChange={(e) => updateScriptState(type, (prev) => prev ? { ...prev, order: parseInt(e.target.value || '0') } : prev)}
+                                        onChange={(e) =>
+                                            updateScriptState(type, (prev) =>
+                                                prev
+                                                    ? {
+                                                          ...prev,
+                                                          order: parseInt(
+                                                              e.target.value ||
+                                                                  "0"
+                                                          ),
+                                                      }
+                                                    : prev
+                                            )
+                                        }
                                     />
                                 </label>
                                 <label className="text-xs text-white/60 flex items-center gap-1">
                                     <input
                                         type="checkbox"
                                         checked={script?.isActive ?? true}
-                                        onChange={(e) => updateScriptState(type, (prev) => prev ? { ...prev, isActive: e.target.checked } : prev)}
+                                        onChange={(e) =>
+                                            updateScriptState(type, (prev) =>
+                                                prev
+                                                    ? {
+                                                          ...prev,
+                                                          isActive:
+                                                              e.target.checked,
+                                                      }
+                                                    : prev
+                                            )
+                                        }
                                     />
                                     启用
                                 </label>
@@ -1732,7 +2253,9 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
                                     disabled={savingType === type}
                                     className="text-xs px-3 py-1 rounded bg-gradient-to-r from-indigo-500 to-purple-600 disabled:opacity-50"
                                 >
-                                    {savingType === type ? '保存中...' : '保存脚本'}
+                                    {savingType === type
+                                        ? "保存中..."
+                                        : "保存脚本"}
                                 </button>
                             </div>
                         </div>
@@ -1754,10 +2277,15 @@ interface SpotNpcDialogEditorProps {
     spotName: string;
 }
 
-function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialogEditorProps) {
+function SpotNpcDialogEditor({
+    npc,
+    spotId,
+    worldName,
+    spotName,
+}: SpotNpcDialogEditorProps) {
     const dialogTypes: Array<{ type: DialogScriptType; label: string }> = [
-        { type: 'entry', label: '入场对话 (entry)' },
-        { type: 'chat', label: '闲聊对话 (chat)' },
+        { type: "entry", label: "入场对话 (entry)" },
+        { type: "chat", label: "闲聊对话 (chat)" },
     ];
 
     const emptyScripts: Record<DialogScriptType, DialogScript | null> = {
@@ -1768,7 +2296,8 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
         farewell: null,
     };
 
-    const [dialogScripts, setDialogScripts] = useState<Record<DialogScriptType, DialogScript | null>>(emptyScripts);
+    const [dialogScripts, setDialogScripts] =
+        useState<Record<DialogScriptType, DialogScript | null>>(emptyScripts);
     const [loadingDialogs, setLoadingDialogs] = useState(false);
     const [savingType, setSavingType] = useState<DialogScriptType | null>(null);
 
@@ -1776,10 +2305,14 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
         try {
             setLoadingDialogs(true);
             // 加载该 NPC 在当前场景的对话脚本
-            const res = await fetch(`/api/admin/dialog-scripts?npcId=${npc.id}&spotId=${spotId}`);
+            const res = await fetch(
+                `/api/admin/dialog-scripts?npcId=${npc.id}&spotId=${spotId}`
+            );
             const data = await res.json();
             if (data.success && data.scripts) {
-                const next: Record<DialogScriptType, DialogScript | null> = { ...emptyScripts };
+                const next: Record<DialogScriptType, DialogScript | null> = {
+                    ...emptyScripts,
+                };
                 for (const script of data.scripts as DialogScript[]) {
                     next[script.type] = script;
                 }
@@ -1795,22 +2328,30 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [npc.id, spotId]);
 
-    const updateScriptState = (type: DialogScriptType, updater: (prev: DialogScript | null) => DialogScript | null) => {
-        setDialogScripts(prev => ({ ...prev, [type]: updater(prev[type]) }));
+    const updateScriptState = (
+        type: DialogScriptType,
+        updater: (prev: DialogScript | null) => DialogScript | null
+    ) => {
+        setDialogScripts((prev) => ({ ...prev, [type]: updater(prev[type]) }));
     };
 
-    const handleLineChange = (type: DialogScriptType, index: number, field: keyof DialogLine, value: string) => {
+    const handleLineChange = (
+        type: DialogScriptType,
+        index: number,
+        field: keyof DialogLine,
+        value: string
+    ) => {
         updateScriptState(type, (prev) => {
             const base: DialogScript = prev ?? {
-                id: '',
+                id: "",
                 npcId: npc.id,
                 spotId,
                 type,
                 lines: [],
                 order: 0,
                 isActive: true,
-                createdAt: '',
-                updatedAt: '',
+                createdAt: "",
+                updatedAt: "",
             };
             const lines = [...base.lines];
             lines[index] = { ...lines[index], [field]: value } as DialogLine;
@@ -1821,19 +2362,22 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
     const handleAddLine = (type: DialogScriptType) => {
         updateScriptState(type, (prev) => {
             const base: DialogScript = prev ?? {
-                id: '',
+                id: "",
                 npcId: npc.id,
                 spotId,
                 type,
                 lines: [],
                 order: 0,
                 isActive: true,
-                createdAt: '',
-                updatedAt: '',
+                createdAt: "",
+                updatedAt: "",
             };
             return {
                 ...base,
-                lines: [...(base.lines || []), { speaker: npc.name, text: '', emotion: 'neutral' }],
+                lines: [
+                    ...(base.lines || []),
+                    { speaker: npc.name, text: "", emotion: "neutral" },
+                ],
             };
         });
     };
@@ -1850,7 +2394,7 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
     const handleSave = async (type: DialogScriptType) => {
         const script = dialogScripts[type];
         if (!script || script.lines.length === 0) {
-            alert('请先填写至少一行对话');
+            alert("请先填写至少一行对话");
             return;
         }
 
@@ -1867,55 +2411,84 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
                 isActive: script.isActive ?? true,
             };
 
-            const res = await fetch(hasId ? `/api/admin/dialog-scripts/${script.id}` : '/api/admin/dialog-scripts', {
-                method: hasId ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(hasId ? { ...script, ...payload } : payload),
-            });
+            const res = await fetch(
+                hasId
+                    ? `/api/admin/dialog-scripts/${script.id}`
+                    : "/api/admin/dialog-scripts",
+                {
+                    method: hasId ? "PUT" : "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(
+                        hasId ? { ...script, ...payload } : payload
+                    ),
+                }
+            );
 
             const data = await res.json();
             if (data.success) {
                 const saved: DialogScript = data.script;
-                setDialogScripts(prev => ({ ...prev, [type]: saved }));
+                setDialogScripts((prev) => ({ ...prev, [type]: saved }));
             } else {
-                alert(data.error || '保存失败');
+                alert(data.error || "保存失败");
             }
         } catch (err) {
-            console.error('保存对话脚本失败', err);
-            alert('保存对话脚本失败');
+            console.error("保存对话脚本失败", err);
+            alert("保存对话脚本失败");
         } finally {
             setSavingType(null);
         }
     };
 
-    const emotionOptions: NPCEmotion[] = ['neutral', 'happy', 'sad', 'surprised', 'angry', 'thinking'];
+    const emotionOptions: NPCEmotion[] = [
+        "neutral",
+        "happy",
+        "sad",
+        "surprised",
+        "angry",
+        "thinking",
+    ];
 
     return (
         <div className="space-y-4">
             {/* NPC 基本信息展示（只读） */}
             <div className="flex items-start gap-3 p-3 bg-white/5 rounded-lg">
                 {npc.sprite && (
-                    <img src={npc.sprite} alt={npc.name} className="w-16 h-16 rounded-lg object-cover" />
+                    <img
+                        src={npc.sprite}
+                        alt={npc.name}
+                        className="w-16 h-16 rounded-lg object-cover"
+                    />
                 )}
                 <div className="flex-1 min-w-0">
                     <div className="font-medium">{npc.name}</div>
                     <div className="text-sm text-white/60">{npc.role}</div>
-                    <div className="text-xs text-white/40 mt-1 line-clamp-2">{npc.description}</div>
+                    <div className="text-xs text-white/40 mt-1 line-clamp-2">
+                        {npc.description}
+                    </div>
                 </div>
             </div>
 
             {/* 对话脚本编辑 */}
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                    <h6 className="text-sm font-medium text-white/80">对话脚本（此场景）</h6>
-                    {loadingDialogs && <span className="text-xs text-white/50">加载中...</span>}
+                    <h6 className="text-sm font-medium text-white/80">
+                        对话脚本（此场景）
+                    </h6>
+                    {loadingDialogs && (
+                        <span className="text-xs text-white/50">加载中...</span>
+                    )}
                 </div>
                 {dialogTypes.map(({ type, label }) => {
                     const script = dialogScripts[type];
                     return (
-                        <div key={type} className="border border-white/10 rounded-lg p-3 space-y-2">
+                        <div
+                            key={type}
+                            className="border border-white/10 rounded-lg p-3 space-y-2"
+                        >
                             <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">{label}</span>
+                                <span className="text-sm font-medium">
+                                    {label}
+                                </span>
                                 <button
                                     onClick={() => handleAddLine(type)}
                                     className="text-xs px-2 py-1 bg-white/10 rounded hover:bg-white/20"
@@ -1924,30 +2497,58 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
                                 </button>
                             </div>
                             {(script?.lines || []).map((line, idx) => (
-                                <div key={`${type}-line-${idx}`} className="grid grid-cols-12 gap-2 items-center">
+                                <div
+                                    key={`${type}-line-${idx}`}
+                                    className="grid grid-cols-12 gap-2 items-center"
+                                >
                                     <input
                                         className="form-input col-span-2"
                                         placeholder="说话者"
                                         value={line.speaker}
-                                        onChange={(e) => handleLineChange(type, idx, 'speaker', e.target.value)}
+                                        onChange={(e) =>
+                                            handleLineChange(
+                                                type,
+                                                idx,
+                                                "speaker",
+                                                e.target.value
+                                            )
+                                        }
                                     />
                                     <input
                                         className="form-input col-span-7"
                                         placeholder="对话内容"
                                         value={line.text}
-                                        onChange={(e) => handleLineChange(type, idx, 'text', e.target.value)}
+                                        onChange={(e) =>
+                                            handleLineChange(
+                                                type,
+                                                idx,
+                                                "text",
+                                                e.target.value
+                                            )
+                                        }
                                     />
                                     <select
                                         className="form-input col-span-2"
-                                        value={line.emotion || 'neutral'}
-                                        onChange={(e) => handleLineChange(type, idx, 'emotion', e.target.value)}
+                                        value={line.emotion || "neutral"}
+                                        onChange={(e) =>
+                                            handleLineChange(
+                                                type,
+                                                idx,
+                                                "emotion",
+                                                e.target.value
+                                            )
+                                        }
                                     >
-                                        {emotionOptions.map(em => (
-                                            <option key={em} value={em}>{em}</option>
+                                        {emotionOptions.map((em) => (
+                                            <option key={em} value={em}>
+                                                {em}
+                                            </option>
                                         ))}
                                     </select>
                                     <button
-                                        onClick={() => handleRemoveLine(type, idx)}
+                                        onClick={() =>
+                                            handleRemoveLine(type, idx)
+                                        }
                                         className="text-xs text-red-300 hover:text-red-200"
                                     >
                                         删除
@@ -1955,7 +2556,9 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
                                 </div>
                             ))}
                             {(script?.lines?.length || 0) === 0 && (
-                                <div className="text-xs text-white/50">暂无对话，点击上方"添加行"开始编辑。</div>
+                                <div className="text-xs text-white/50">
+                                    暂无对话，点击上方"添加行"开始编辑。
+                                </div>
                             )}
                             <div className="flex items-center justify-end gap-3 pt-2">
                                 <label className="text-xs text-white/60 flex items-center gap-1">
@@ -1964,14 +2567,36 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
                                         type="number"
                                         className="form-input w-20"
                                         value={script?.order ?? 0}
-                                        onChange={(e) => updateScriptState(type, (prev) => prev ? { ...prev, order: parseInt(e.target.value || '0') } : prev)}
+                                        onChange={(e) =>
+                                            updateScriptState(type, (prev) =>
+                                                prev
+                                                    ? {
+                                                          ...prev,
+                                                          order: parseInt(
+                                                              e.target.value ||
+                                                                  "0"
+                                                          ),
+                                                      }
+                                                    : prev
+                                            )
+                                        }
                                     />
                                 </label>
                                 <label className="text-xs text-white/60 flex items-center gap-1">
                                     <input
                                         type="checkbox"
                                         checked={script?.isActive ?? true}
-                                        onChange={(e) => updateScriptState(type, (prev) => prev ? { ...prev, isActive: e.target.checked } : prev)}
+                                        onChange={(e) =>
+                                            updateScriptState(type, (prev) =>
+                                                prev
+                                                    ? {
+                                                          ...prev,
+                                                          isActive:
+                                                              e.target.checked,
+                                                      }
+                                                    : prev
+                                            )
+                                        }
                                     />
                                     启用
                                 </label>
@@ -1980,7 +2605,9 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
                                     disabled={savingType === type}
                                     className="text-xs px-3 py-1 rounded bg-gradient-to-r from-indigo-500 to-purple-600 disabled:opacity-50"
                                 >
-                                    {savingType === type ? '保存中...' : '保存脚本'}
+                                    {savingType === type
+                                        ? "保存中..."
+                                        : "保存脚本"}
                                 </button>
                             </div>
                         </div>
@@ -1995,7 +2622,13 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
 // 通用表单组件
 // ============================================
 
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+function FormSection({
+    title,
+    children,
+}: {
+    title: string;
+    children: React.ReactNode;
+}) {
     return (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
             <h2 className="text-xl font-bold mb-6">{title}</h2>
@@ -2017,7 +2650,11 @@ function FormField({
 }) {
     return (
         <div>
-            <label className={`block font-medium text-white/80 mb-1.5 ${small ? 'text-xs' : 'text-sm'}`}>
+            <label
+                className={`block font-medium text-white/80 mb-1.5 ${
+                    small ? "text-xs" : "text-sm"
+                }`}
+            >
                 {label}
                 {required && <span className="text-red-400 ml-1">*</span>}
             </label>
@@ -2030,10 +2667,10 @@ function MediaUpload({
     value,
     onChange,
     prompt,
-    accept = 'image/*',
-    placeholder = '输入图片 URL 或上传',
-    uploadLabel = '上传',
-    previewType = 'image',
+    accept = "image/*",
+    placeholder = "输入图片 URL 或上传",
+    uploadLabel = "上传",
+    previewType = "image",
 }: {
     value?: string;
     onChange: (url: string) => void;
@@ -2041,10 +2678,12 @@ function MediaUpload({
     accept?: string;
     placeholder?: string;
     uploadLabel?: string;
-    previewType?: 'image' | 'audio' | 'none';
+    previewType?: "image" | "audio" | "none";
 }) {
     const [isUploading, setIsUploading] = useState(false);
-    const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+    const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
+        "idle"
+    );
     const [uploadError, setUploadError] = useState<string | null>(null);
 
     const promptText = prompt?.trim();
@@ -2053,12 +2692,12 @@ function MediaUpload({
         if (!promptText) return;
         try {
             await navigator.clipboard.writeText(promptText);
-            setCopyStatus('copied');
-            setTimeout(() => setCopyStatus('idle'), 2000);
+            setCopyStatus("copied");
+            setTimeout(() => setCopyStatus("idle"), 2000);
         } catch (err) {
-            console.error('复制 prompt 失败:', err);
-            setCopyStatus('error');
-            setTimeout(() => setCopyStatus('idle'), 2000);
+            console.error("复制 prompt 失败:", err);
+            setCopyStatus("error");
+            setTimeout(() => setCopyStatus("idle"), 2000);
         }
     };
 
@@ -2070,10 +2709,10 @@ function MediaUpload({
         setUploadError(null);
         try {
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append("file", file);
 
-            const response = await fetch('/api/upload', {
-                method: 'POST',
+            const response = await fetch("/api/upload", {
+                method: "POST",
                 body: formData,
             });
             const data = await response.json();
@@ -2084,8 +2723,10 @@ function MediaUpload({
                 onChange(data.url);
             }
         } catch (err) {
-            console.error('上传失败:', err);
-            setUploadError(err instanceof Error ? err.message : '上传失败，请稍后重试');
+            console.error("上传失败:", err);
+            setUploadError(
+                err instanceof Error ? err.message : "上传失败，请稍后重试"
+            );
         } finally {
             setIsUploading(false);
         }
@@ -2095,27 +2736,31 @@ function MediaUpload({
         <div className="space-y-2">
             {promptText && (
                 <div className="flex items-start gap-2 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-xs text-white/70">
-                    <div className="shrink-0 pt-0.5" title="图片生成提示词">💡</div>
+                    <div className="shrink-0 pt-0.5" title="图片生成提示词">
+                        💡
+                    </div>
                     <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2">
-                            <span className="font-medium text-white">提示词</span>
+                            <span className="font-medium text-white">
+                                提示词
+                            </span>
                             <button
                                 type="button"
                                 onClick={handleCopyPrompt}
                                 className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/15 text-[11px] transition-colors"
-                                disabled={copyStatus === 'copied'}
+                                disabled={copyStatus === "copied"}
                             >
-                                {copyStatus === 'copied' ? '已复制' : '复制'}
+                                {copyStatus === "copied" ? "已复制" : "复制"}
                             </button>
                         </div>
                         <p
                             className="leading-relaxed text-white/70 break-words"
                             title={promptText}
                             style={{
-                                display: '-webkit-box',
+                                display: "-webkit-box",
                                 WebkitLineClamp: 3,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
                             }}
                         >
                             {promptText}
@@ -2126,13 +2771,13 @@ function MediaUpload({
             <div className="flex gap-2">
                 <input
                     type="text"
-                    value={value || ''}
+                    value={value || ""}
                     onChange={(e) => onChange(e.target.value)}
                     placeholder={placeholder}
                     className="form-input flex-1"
                 />
                 <label className="px-4 py-2 bg-white/10 hover:bg-white/15 rounded-xl cursor-pointer text-sm transition-colors">
-                    {isUploading ? '上传中...' : uploadLabel}
+                    {isUploading ? "上传中..." : uploadLabel}
                     <input
                         type="file"
                         accept={accept}
@@ -2149,15 +2794,23 @@ function MediaUpload({
             )}
             {value && (
                 <div
-                    className={`relative ${previewType === 'audio' ? 'w-full max-w-sm p-2' : 'w-32 h-20'} bg-white/5 rounded-lg overflow-hidden`}
+                    className={`relative ${
+                        previewType === "audio"
+                            ? "w-full max-w-sm p-2"
+                            : "w-32 h-20"
+                    } bg-white/5 rounded-lg overflow-hidden`}
                 >
-                    {previewType === 'audio' ? (
+                    {previewType === "audio" ? (
                         <audio src={value} controls className="w-full" />
-                    ) : previewType === 'image' ? (
-                        <img src={value} alt="" className="w-full h-full object-cover" />
+                    ) : previewType === "image" ? (
+                        <img
+                            src={value}
+                            alt=""
+                            className="w-full h-full object-cover"
+                        />
                     ) : null}
                     <button
-                        onClick={() => onChange('')}
+                        onClick={() => onChange("")}
                         className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white/60 hover:text-white"
                     >
                         ×
@@ -2183,7 +2836,7 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
     const [isCreating, setIsCreating] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showAIGenerateModal, setShowAIGenerateModal] = useState(false);
-    const [aiPrompt, setAIPrompt] = useState('');
+    const [aiPrompt, setAIPrompt] = useState("");
     const [isGenerating, setIsGenerating] = useState(false);
     const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -2191,17 +2844,17 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
         setIsCreating(true);
         try {
             const response = await fetch(`/api/admin/worlds/${worldId}/npcs`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    name: '新 NPC',
-                    role: '居民',
-                    description: '',
-                    backstory: '',
+                    name: "新 NPC",
+                    role: "居民",
+                    description: "",
+                    backstory: "",
                     personality: [],
-                    appearance: '',
-                    speakingStyle: '',
-                    generationStatus: 'pending',
+                    appearance: "",
+                    speakingStyle: "",
+                    generationStatus: "pending",
                 }),
             });
             const data = await response.json();
@@ -2210,7 +2863,7 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
                 setEditingNPC(data.npc);
             }
         } catch (err) {
-            console.error('创建 NPC 失败', err);
+            console.error("创建 NPC 失败", err);
         } finally {
             setIsCreating(false);
         }
@@ -2218,7 +2871,7 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
 
     const handleAIGenerate = async () => {
         if (!aiPrompt.trim()) {
-            setGenerateError('请输入 NPC 的描述要求');
+            setGenerateError("请输入 NPC 的描述要求");
             return;
         }
 
@@ -2226,23 +2879,26 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
         setGenerateError(null);
 
         try {
-            const response = await fetch(`/api/admin/worlds/${worldId}/npcs/generate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: aiPrompt }),
-            });
+            const response = await fetch(
+                `/api/admin/worlds/${worldId}/npcs/generate`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt: aiPrompt }),
+                }
+            );
             const data = await response.json();
             if (data.success && data.npc) {
                 onNPCsChange([...npcs, data.npc]);
                 setEditingNPC(data.npc);
                 setShowAIGenerateModal(false);
-                setAIPrompt('');
+                setAIPrompt("");
             } else {
-                setGenerateError(data.error || 'AI 生成失败');
+                setGenerateError(data.error || "AI 生成失败");
             }
         } catch (err) {
-            console.error('AI 生成 NPC 失败', err);
-            setGenerateError('网络错误，请重试');
+            console.error("AI 生成 NPC 失败", err);
+            setGenerateError("网络错误，请重试");
         } finally {
             setIsGenerating(false);
         }
@@ -2252,37 +2908,37 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
         setIsSaving(true);
         try {
             const response = await fetch(`/api/admin/npcs/${npc.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(npc),
             });
             const data = await response.json();
             if (data.success && data.npc) {
-                onNPCsChange(npcs.map(n => n.id === npc.id ? data.npc : n));
+                onNPCsChange(npcs.map((n) => (n.id === npc.id ? data.npc : n)));
                 setEditingNPC(null);
             }
         } catch (err) {
-            console.error('保存 NPC 失败', err);
+            console.error("保存 NPC 失败", err);
         } finally {
             setIsSaving(false);
         }
     };
 
     const handleDeleteNPC = async (npcId: string) => {
-        if (!confirm('确定要删除这个 NPC 吗？')) return;
+        if (!confirm("确定要删除这个 NPC 吗？")) return;
         try {
             const response = await fetch(`/api/admin/npcs/${npcId}`, {
-                method: 'DELETE',
+                method: "DELETE",
             });
             const data = await response.json();
             if (data.success) {
-                onNPCsChange(npcs.filter(n => n.id !== npcId));
+                onNPCsChange(npcs.filter((n) => n.id !== npcId));
                 if (editingNPC?.id === npcId) {
                     setEditingNPC(null);
                 }
             }
         } catch (err) {
-            console.error('删除 NPC 失败', err);
+            console.error("删除 NPC 失败", err);
         }
     };
 
@@ -2303,20 +2959,21 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
                         disabled={isCreating}
                         className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-sm font-medium disabled:opacity-50"
                     >
-                        {isCreating ? '创建中...' : '+ 手动新增'}
+                        {isCreating ? "创建中..." : "+ 手动新增"}
                     </button>
                 </div>
             </div>
 
             {/* NPC 列表 */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {npcs.map(npc => (
+                {npcs.map((npc) => (
                     <div
                         key={npc.id}
-                        className={`bg-white/5 border rounded-xl p-4 cursor-pointer transition-all ${editingNPC?.id === npc.id
-                                ? 'border-indigo-500/50 bg-indigo-500/10'
-                                : 'border-white/10 hover:border-white/20'
-                            }`}
+                        className={`bg-white/5 border rounded-xl p-4 cursor-pointer transition-all ${
+                            editingNPC?.id === npc.id
+                                ? "border-indigo-500/50 bg-indigo-500/10"
+                                : "border-white/10 hover:border-white/20"
+                        }`}
                         onClick={() => setEditingNPC(npc)}
                     >
                         <div className="flex gap-3">
@@ -2332,10 +2989,14 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
                                 </div>
                             )}
                             <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate">{npc.name}</div>
-                                <div className="text-sm text-white/50">{npc.role}</div>
+                                <div className="font-medium truncate">
+                                    {npc.name}
+                                </div>
+                                <div className="text-sm text-white/50">
+                                    {npc.role}
+                                </div>
                                 <div className="text-xs text-white/40 mt-1 line-clamp-2">
-                                    {npc.description || '暂无描述'}
+                                    {npc.description || "暂无描述"}
                                 </div>
                             </div>
                         </div>
@@ -2374,7 +3035,7 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
                                 <button
                                     onClick={() => {
                                         setShowAIGenerateModal(false);
-                                        setAIPrompt('');
+                                        setAIPrompt("");
                                         setGenerateError(null);
                                     }}
                                     className="text-white/50 hover:text-white"
@@ -2390,14 +3051,18 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
                                 </label>
                                 <textarea
                                     value={aiPrompt}
-                                    onChange={(e) => setAIPrompt(e.target.value)}
+                                    onChange={(e) =>
+                                        setAIPrompt(e.target.value)
+                                    }
                                     placeholder="例如：一个神秘的老者，是这个世界的守护者，知道很多古老的秘密..."
                                     rows={4}
                                     className="form-input w-full"
                                     disabled={isGenerating}
                                 />
                                 <p className="text-xs text-white/40 mt-2">
-                                    AI 会根据你的描述，结合世界的背景、文化、居民特点等信息，生成一个完整的 NPC 角色。
+                                    AI
+                                    会根据你的描述，结合世界的背景、文化、居民特点等信息，生成一个完整的
+                                    NPC 角色。
                                 </p>
                             </div>
 
@@ -2411,7 +3076,7 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
                                 <button
                                     onClick={() => {
                                         setShowAIGenerateModal(false);
-                                        setAIPrompt('');
+                                        setAIPrompt("");
                                         setGenerateError(null);
                                     }}
                                     disabled={isGenerating}
@@ -2426,7 +3091,9 @@ function NPCSection({ worldId, npcs, onNPCsChange }: NPCSectionProps) {
                                 >
                                     {isGenerating ? (
                                         <>
-                                            <span className="animate-spin">⏳</span>
+                                            <span className="animate-spin">
+                                                ⏳
+                                            </span>
                                             生成中...
                                         </>
                                     ) : (
@@ -2457,11 +3124,20 @@ interface NPCEditorModalProps {
     isSaving: boolean;
 }
 
-function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorModalProps) {
+function NPCEditorModal({
+    npc,
+    onSave,
+    onDelete,
+    onClose,
+    isSaving,
+}: NPCEditorModalProps) {
     const [editNPC, setEditNPC] = useState<SpotNPC>({ ...npc });
 
-    const updateField = <K extends keyof SpotNPC>(field: K, value: SpotNPC[K]) => {
-        setEditNPC(prev => ({ ...prev, [field]: value }));
+    const updateField = <K extends keyof SpotNPC>(
+        field: K,
+        value: SpotNPC[K]
+    ) => {
+        setEditNPC((prev) => ({ ...prev, [field]: value }));
     };
 
     return (
@@ -2470,7 +3146,9 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                 <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 sticky top-0 bg-neutral-900">
                     <div>
                         <div className="text-lg font-bold">编辑 NPC</div>
-                        <div className="text-white/50 text-sm">{editNPC.name} · {editNPC.role}</div>
+                        <div className="text-white/50 text-sm">
+                            {editNPC.name} · {editNPC.role}
+                        </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <button
@@ -2484,7 +3162,7 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                             disabled={isSaving}
                             className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-sm font-medium disabled:opacity-50"
                         >
-                            {isSaving ? '保存中...' : '保存'}
+                            {isSaving ? "保存中..." : "保存"}
                         </button>
                         <button
                             onClick={onClose}
@@ -2501,7 +3179,9 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                             <input
                                 type="text"
                                 value={editNPC.name}
-                                onChange={(e) => updateField('name', e.target.value)}
+                                onChange={(e) =>
+                                    updateField("name", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
@@ -2509,7 +3189,9 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                             <input
                                 type="text"
                                 value={editNPC.role}
-                                onChange={(e) => updateField('role', e.target.value)}
+                                onChange={(e) =>
+                                    updateField("role", e.target.value)
+                                }
                                 className="form-input"
                             />
                         </FormField>
@@ -2518,7 +3200,9 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                     <FormField label="简介">
                         <textarea
                             value={editNPC.description}
-                            onChange={(e) => updateField('description', e.target.value)}
+                            onChange={(e) =>
+                                updateField("description", e.target.value)
+                            }
                             rows={3}
                             className="form-input"
                         />
@@ -2527,7 +3211,9 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                     <FormField label="背景故事">
                         <textarea
                             value={editNPC.backstory}
-                            onChange={(e) => updateField('backstory', e.target.value)}
+                            onChange={(e) =>
+                                updateField("backstory", e.target.value)
+                            }
                             rows={4}
                             className="form-input"
                         />
@@ -2536,7 +3222,9 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                     <FormField label="外貌描述">
                         <textarea
                             value={editNPC.appearance}
-                            onChange={(e) => updateField('appearance', e.target.value)}
+                            onChange={(e) =>
+                                updateField("appearance", e.target.value)
+                            }
                             rows={2}
                             className="form-input"
                         />
@@ -2546,7 +3234,9 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                         <input
                             type="text"
                             value={editNPC.speakingStyle}
-                            onChange={(e) => updateField('speakingStyle', e.target.value)}
+                            onChange={(e) =>
+                                updateField("speakingStyle", e.target.value)
+                            }
                             className="form-input"
                         />
                     </FormField>
@@ -2554,21 +3244,23 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                     <FormField label="性格特点">
                         <TagsInput
                             value={editNPC.personality || []}
-                            onChange={(tags) => updateField('personality', tags)}
+                            onChange={(tags) =>
+                                updateField("personality", tags)
+                            }
                         />
                     </FormField>
 
                     <FormField label="兴趣爱好">
                         <TagsInput
                             value={editNPC.interests || []}
-                            onChange={(tags) => updateField('interests', tags)}
+                            onChange={(tags) => updateField("interests", tags)}
                         />
                     </FormField>
 
                     <FormField label="立绘">
                         <MediaUpload
                             value={editNPC.sprite}
-                            onChange={(url) => updateField('sprite', url)}
+                            onChange={(url) => updateField("sprite", url)}
                             prompt={buildNPCPortraitPrompt({
                                 name: editNPC.name,
                                 role: editNPC.role,
@@ -2581,12 +3273,20 @@ function NPCEditorModal({ npc, onSave, onDelete, onClose, isSaving }: NPCEditorM
                     <FormField label="生成状态">
                         <select
                             value={editNPC.generationStatus}
-                            onChange={(e) => updateField('generationStatus', e.target.value as SpotNPC['generationStatus'])}
+                            onChange={(e) =>
+                                updateField(
+                                    "generationStatus",
+                                    e.target
+                                        .value as SpotNPC["generationStatus"]
+                                )
+                            }
                             className="form-input"
                         >
                             <option value="pending">待生成</option>
                             <option value="generating_text">生成文本中</option>
-                            <option value="generating_sprite">生成立绘中</option>
+                            <option value="generating_sprite">
+                                生成立绘中
+                            </option>
                             <option value="ready">已就绪</option>
                             <option value="error">错误</option>
                         </select>
@@ -2604,21 +3304,21 @@ function TagsInput({
     value: string[];
     onChange: (tags: string[]) => void;
 }) {
-    const [inputValue, setInputValue] = useState('');
+    const [inputValue, setInputValue] = useState("");
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' || e.key === ',') {
+        if (e.key === "Enter" || e.key === ",") {
             e.preventDefault();
             const tag = inputValue.trim();
             if (tag && !value.includes(tag)) {
                 onChange([...value, tag]);
             }
-            setInputValue('');
+            setInputValue("");
         }
     };
 
     const removeTag = (tagToRemove: string) => {
-        onChange(value.filter(tag => tag !== tagToRemove));
+        onChange(value.filter((tag) => tag !== tagToRemove));
     };
 
     return (
@@ -2633,7 +3333,7 @@ function TagsInput({
             />
             {value.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                    {value.map(tag => (
+                    {value.map((tag) => (
                         <span
                             key={tag}
                             className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded-lg text-sm"

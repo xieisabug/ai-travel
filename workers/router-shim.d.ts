@@ -1,4 +1,4 @@
-declare module 'virtual:react-router/server-build' {
-  const build: any;
-  export default build;
+declare module "virtual:react-router/server-build" {
+    const build: any;
+    export default build;
 }
