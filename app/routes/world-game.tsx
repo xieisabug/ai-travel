@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-    CompletedScreen,
-    DepartingScreen,
-    DialogLoading,
-    DialogScreen,
-    ErrorScreen,
-    ExploringScreen,
-    FallbackScreen,
     LoadingScreen,
-    ReturningScreen,
+    ErrorScreen,
+    DepartingScreen,
     TravelingScreen,
-} from "~/components/world-game-phases";
+    ExploringScreen,
+    DialogScreen,
+    DialogLoading,
+    ReturningScreen,
+    CompletedScreen,
+    FallbackScreen,
+} from "~/components/world-game";
 import type {
     TravelSession,
     Spot,
@@ -363,7 +363,6 @@ export default function WorldGamePage() {
         ];
         const canStart = projectBgmUrl && allowedStartPhases.includes(phase);
 
-        // 切换项目或无音乐时，停止并重置
         if (
             !projectBgmUrl ||
             (session?.projectId &&
@@ -378,10 +377,8 @@ export default function WorldGamePage() {
             return;
         }
 
-        // 仅在首次进入允许阶段时启动当前项目的音乐
         if (canStart && session?.projectId) {
             if (audioProjectRef.current !== session.projectId) {
-                // 新项目，初始化音频
                 if (!audioRef.current) {
                     audioRef.current = new Audio(projectBgmUrl);
                 } else {
@@ -405,7 +402,6 @@ export default function WorldGamePage() {
                 }
             };
 
-            // 如果已经在播放同一项目且未暂停，则不重启
             if (audioEl.paused) {
                 playAudio();
             }
@@ -435,6 +431,7 @@ export default function WorldGamePage() {
         }, 3000);
     };
 
+    // 根据阶段渲染不同的屏幕
     if (phase === "loading") {
         return <LoadingScreen />;
     }

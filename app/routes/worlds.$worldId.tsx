@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AuthModal } from "~/components/auth-modal";
+import { AuthModal } from "~/components/auth";
 import { DailyRewardToast } from "~/components/daily-reward-toast";
 import {
     CardStack,
