@@ -103,7 +103,7 @@ export default function WorldDetailPage() {
 
     const projectId = firstProject?.id || currentWorld.travelProjects?.[0]?.id;
     if (!projectId) {
-      setPreparingMessage('没有可用的旅游项目');
+      setPreparingMessage('没有可用的区域');
       setTimeout(() => setViewState('detail'), 2000);
       return;
     }
@@ -454,7 +454,7 @@ export default function WorldDetailPage() {
               <SectionHeader
                 label="探索行程"
                 title={<>精彩<HighlightText theme="cyan">旅程</HighlightText></>}
-                description={`本次旅行包含 ${projects.length} 个精彩项目`}
+                description={`本次旅行包含 ${projects.length} 个精彩区域`}
                 theme="cyan"
               />
 

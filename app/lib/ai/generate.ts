@@ -189,17 +189,17 @@ ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一�
     }
 }`,
 
-    // 旅游项目生成 prompt
-    generateTravelProjects: (world: World, count: number = 3) => `请为当前世界设计 ${count} 个独特的旅游项目。
+    // 区域生成 prompt（原“旅游项目”）
+    generateTravelProjects: (world: World, count: number = 3) => `请为当前世界设计 ${count} 个独特的区域。
 
 【重要提醒】
-- 所有旅游项目必须与世界的地理（${world.geography.slice(0, 50)}...）和气候（${world.climate.slice(0, 50)}...）相符
-- 项目内容必须体现世界的文化特色（${world.culture.slice(0, 50)}...）
-- 确保项目之间有差异化，覆盖不同的体验类型
+- 所有区域必须与世界的地理（${world.geography.slice(0, 50)}...）和气候（${world.climate.slice(0, 50)}...）相符
+- 区域内容必须体现世界的文化特色（${world.culture.slice(0, 50)}...）
+- 确保区域之间有差异化，覆盖不同的体验类型
 
-每个旅游项目应包含：
-1. 项目名称（与世界风格契合）
-2. 项目描述（100字左右，突出特色体验）
+每个区域应包含：
+1. 区域名称（与世界风格契合）
+2. 区域描述（100字左右，突出特色体验）
 3. 推荐游玩天数
 4. 难度等级（1-5）
 5. 特色标签（3-5个）
@@ -208,8 +208,8 @@ ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一�
 请以 JSON 数组格式返回：
 [
     {
-        "name": "项目名称",
-        "description": "项目描述",
+        "name": "区域名称",
+        "description": "区域描述",
         "duration": 3,
         "difficulty": 2,
         "tags": ["标签1", "标签2"],
@@ -217,23 +217,23 @@ ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一�
     }
 ]`,
 
-    // 景点生成 prompt
-    generateSpots: (project: TravelProject, world: World, count: number = 5) => `请为以下旅游项目设计 ${count} 个独特的景点：
+    // 场景生成 prompt（原“景点”）
+    generateSpots: (project: TravelProject, world: World, count: number = 5) => `请为以下区域设计 ${count} 个独特的场景：
 
-旅游项目信息：
-- 项目名称：${project.name}
-- 项目描述：${project.description}
-- 项目标签：${project.tags.join('、')}
+区域信息：
+- 区域名称：${project.name}
+- 区域描述：${project.description}
+- 区域标签：${project.tags.join('、')}
 
 【重要提醒 - 一致性要求】
-- 所有景点必须符合世界的地理特征
-- 所有景点必须符合世界的气候特点
-- 景点描述必须体现世界的文化特色
-- 例如：如果是冰雪世界，景点应该有冰川、雪山、极光等元素，而不是沙漠、火山
-- 例如：如果是海底世界，景点应该有珊瑚、海藻、水下建筑等，而不是陆地森林
+- 所有场景必须符合世界的地理特征
+- 所有场景必须符合世界的气候特点
+- 场景描述必须体现世界的文化特色
+- 例如：如果是冰雪世界，场景应该有冰川、雪山、极光等元素，而不是沙漠、火山
+- 例如：如果是海底世界，场景应该有珊瑚、海藻、水下建筑等，而不是陆地森林
 
-每个景点应包含：
-1. 景点名称（富有想象力，与世界风格契合）
+每个场景应包含：
+1. 场景名称（富有想象力，与世界风格契合）
 2. 简短描述（50字以内）
 3. 详细描述（150字左右，细节要与世界设定一致）
 4. 历史/传说故事（200字左右，与世界文化背景相符）
@@ -244,7 +244,7 @@ ${theme ? `主题/风格提示: ${theme}` : '请自由发挥创意，创造一�
 请以 JSON 数组格式返回，并按照推荐的游览顺序排列：
 [
     {
-        "name": "景点名称",
+        "name": "场景名称",
         "description": "简短描述",
         "detailedDescription": "详细描述",
         "story": "历史传说故事",
@@ -293,10 +293,10 @@ ${userPrompt}
     // NPC 生成 prompt（基于景点）
     generateNPC: (spot: Spot, world: World) => `请为以下景点创建一个独特的 NPC 角色：
 
-景点信息：
-- 景点名称：${spot.name}
-- 景点描述：${spot.description}
-- 景点故事：${spot.story}
+场景信息：
+- 场景名称：${spot.name}
+- 场景描述：${spot.description}
+- 场景故事：${spot.story}
 
 【重要提醒 - 角色设定要求】
 - NPC 必须符合世界的居民特点：${world.inhabitants}
@@ -305,11 +305,11 @@ ${userPrompt}
 - NPC 必须是友善、有趣、适合全年龄段的角色
 - 角色应该能够为游客提供有价值的信息和互动体验
 
-请创建一个符合这个景点和世界观的 NPC，包含：
+请创建一个符合这个场景和世界观的 NPC，包含：
 1. 名称（符合世界文化的名字）
 2. 角色定位（如：导游、店主、守护者、居民等）
 3. 简短描述
-4. 背景故事（150字左右，与景点故事有关联）
+4. 背景故事（150字左右，与场景故事有关联）
 5. 性格特点（3-5个积极正面的词语）
 6. 外貌描述（详细描述外貌特征，用于生成立绘，必须与世界居民特点相符）
 7. 说话风格（必须与世界语言特色相符）
@@ -768,7 +768,7 @@ export async function ai_generate_npc_dialog(
     const { npc, spot, world, dialogType, previousDialog } = params;
 
     const dialogTypeDescription = dialogType === 'entry'
-        ? '玩家刚刚来到这个景点，这是第一次见面的入场对话'
+        ? '玩家刚刚来到这个场景，这是第一次见面的入场对话'
         : '玩家想要和 NPC 继续聊天';
 
     const previousContext = previousDialog && previousDialog.length > 0
@@ -785,11 +785,11 @@ export async function ai_generate_npc_dialog(
 - 背景故事：${npc.backstory}
 - 兴趣爱好：${npc.interests?.join('、') || '无'}
 
-【景点信息】
-- 景点名称：${spot.name}
-- 景点描述：${spot.description}
-- 景点故事：${spot.story}
-- 景点亮点：${spot.highlights.join('、')}
+【场景信息】
+- 场景名称：${spot.name}
+- 场景描述：${spot.description}
+- 场景故事：${spot.story}
+- 场景亮点：${spot.highlights.join('、')}
 
 【场景说明】
 ${dialogTypeDescription}
@@ -798,7 +798,7 @@ ${previousContext}
 【生成要求】
 1. 对话必须完全符合 NPC 的性格和说话风格
 2. 内容要体现世界的文化特色
-3. ${dialogType === 'entry' ? '要包含对景点的介绍和欢迎语' : '可以聊一些有趣的话题，透露世界的秘密或趣事'}
+3. ${dialogType === 'entry' ? '要包含对场景的介绍和欢迎语' : '可以聊一些有趣的话题，透露世界的秘密或趣事'}
 4. 每段对话控制在 30-80 字之间，适合打字机效果展示
 5. 生成 3-5 段对话
 6. 情绪要与对话内容匹配

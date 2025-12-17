@@ -107,13 +107,13 @@ export default function WorldGamePage() {
 
   const loadSpot = async (projectId: string, spotId: string) => {
     if (!spotId) {
-      console.warn('spotId 为空，跳过加载景点');
+      console.warn('spotId 为空，跳过加载场景');
       return;
     }
 
     try {
       const response = await fetch(`/api/projects/${projectId}/spots/${spotId}`);
-      if (!response.ok) throw new Error('加载景点失败');
+      if (!response.ok) throw new Error('加载场景失败');
       const spot = (await response.json()) as Spot;
       setCurrentSpot(spot);
 
@@ -123,7 +123,7 @@ export default function WorldGamePage() {
         generateEntryDialog(spot, npc);
       }
     } catch (err) {
-      console.error('加载景点失败:', err);
+      console.error('加载场景失败:', err);
     }
   };
 
@@ -260,7 +260,7 @@ export default function WorldGamePage() {
         if (data.completed) {
           setPhase('returning');
         } else {
-          throw new Error(data.error || '前往下一景点失败');
+          throw new Error(data.error || '前往下一场景失败');
         }
         return;
       }
@@ -274,7 +274,7 @@ export default function WorldGamePage() {
         }
       }
     } catch (err) {
-      console.error('前往下一景点失败:', err);
+      console.error('前往下一场景失败:', err);
     }
   };
 

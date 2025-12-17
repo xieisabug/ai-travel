@@ -253,7 +253,7 @@ export default function AdminWorlds() {
         });
     };
 
-    // 更新景点字段
+    // 更新场景字段
     const updateSpotField = (projectId: string, spotId: string, field: keyof Spot, value: any) => {
         if (!selectedWorld) return;
         setSelectedWorld({
@@ -437,7 +437,7 @@ function WorldList({ worlds, onSelectWorld, onDeleteWorld }: WorldListProps) {
                         <p className="text-white/60 text-sm line-clamp-2 mb-4">{world.description}</p>
 
                         <div className="flex items-center gap-2 text-xs text-white/40 mb-4">
-                            <span>{world.travelProjects?.length || 0} 个项目</span>
+                            <span>{world.travelProjects?.length || 0} 个区域</span>
                             <span>·</span>
                             <span>{new Date(world.createdAt).toLocaleDateString()}</span>
                         </div>
@@ -515,7 +515,7 @@ function WorldEditor({
         { id: 'details', label: '风土人情' },
         { id: 'npcs', label: 'NPC 管理' },
         { id: 'vehicle', label: '旅行器' },
-        { id: 'projects', label: '旅游项目' },
+        { id: 'projects', label: '区域' },
     ];
 
     return (
@@ -1042,13 +1042,13 @@ function WorldEditor({
                     </FormSection>
                 )}
 
-                {/* 旅游项目 */}
+                {/* 区域 */}
                 {activeSection === 'projects' && (
                     <div className="space-y-4">
-                        <h2 className="text-xl font-bold">旅游项目 ({world.travelProjects?.length || 0})</h2>
+                        <h2 className="text-xl font-bold">区域 ({world.travelProjects?.length || 0})</h2>
                         {world.travelProjects?.map((project, projectIndex) => (
                             <div key={project.id} className="border border-white/10 rounded-xl overflow-hidden">
-                                {/* 项目标题栏 */}
+                                {/* 区域标题栏 */}
                                 <button
                                     onClick={() => toggleProject(project.id)}
                                     className="w-full px-6 py-4 bg-white/5 flex items-center justify-between hover:bg-white/10 transition-colors"
@@ -1074,12 +1074,12 @@ function WorldEditor({
                                     </svg>
                                 </button>
 
-                                {/* 项目详情 */}
+                                {/* 区域详情 */}
                                 {expandedProjects.has(project.id) && (
                                     <div className="p-6 space-y-6 border-t border-white/10">
-                                        {/* 项目基础信息 */}
+                                        {/* 区域基础信息 */}
                                         <div className="grid grid-cols-2 gap-4">
-                                            <FormField label="项目名称">
+                                            <FormField label="区域名称">
                                                 <input
                                                     type="text"
                                                     value={project.name}
@@ -1101,7 +1101,7 @@ function WorldEditor({
                                                 </select>
                                             </FormField>
                                         </div>
-                                        <FormField label="项目描述">
+                                        <FormField label="区域描述">
                                             <textarea
                                                 value={project.description}
                                                 onChange={(e) => onUpdateProject(project.id, 'description', e.target.value)}
@@ -1165,9 +1165,9 @@ function WorldEditor({
                                             />
                                         </FormField>
 
-                                        {/* 景点列表 */}
+                                        {/* 场景列表 */}
                                         <div className="pt-4 border-t border-white/10">
-                                            <h4 className="font-medium mb-4">景点 ({project.spots?.length || 0})</h4>
+                                            <h4 className="font-medium mb-4">场景 ({project.spots?.length || 0})</h4>
                                             <div className="space-y-3">
                                                 {project.spots?.map((spot, spotIndex) => (
                                                     <div key={spot.id} className="border border-white/10 rounded-lg overflow-hidden">
@@ -1217,7 +1217,7 @@ function WorldEditor({
 }
 
 // ============================================
-// 景点编辑器组件
+// 场景编辑器组件
 // ============================================
 
 interface SpotEditorProps {
@@ -1232,7 +1232,7 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
     const [expandedNpcs, setExpandedNpcs] = useState<Set<string>>(new Set());
     const [selectedNpcToAdd, setSelectedNpcToAdd] = useState<string>('');
 
-    // 获取景点已关联的 NPC
+    // 获取场景已关联的 NPC
     const linkedNpcIds = spot.npcIds || [];
     const linkedNpcs = worldNpcs.filter(npc => linkedNpcIds.includes(npc.id));
     const availableNpcs = worldNpcs.filter(npc => !linkedNpcIds.includes(npc.id));
@@ -1263,7 +1263,7 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
 
     return (
         <>
-            <FormField label="景点名称">
+            <FormField label="场景名称">
                 <input
                     type="text"
                     value={spot.name}
@@ -1287,7 +1287,7 @@ function SpotEditor({ spot, worldName, spotId, worldNpcs, onUpdate }: SpotEditor
                     className="form-input"
                 />
             </FormField>
-            <FormField label="景点图片">
+            <FormField label="场景图片">
                 <MediaUpload
                     value={spot.image}
                     onChange={(url) => onUpdate('image', url)}
@@ -1744,7 +1744,7 @@ function NpcEditor({ npc, worldName, spotName, spotId, onUpdate }: NpcEditorProp
 }
 
 // ============================================
-// 景点 NPC 对话编辑器组件（仅管理对话，不编辑 NPC 属性）
+// 场景 NPC 对话编辑器组件（仅管理对话，不编辑 NPC 属性）
 // ============================================
 
 interface SpotNpcDialogEditorProps {
@@ -1775,7 +1775,7 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
     const loadDialogScripts = async () => {
         try {
             setLoadingDialogs(true);
-            // 加载该 NPC 在当前景点的对话脚本
+            // 加载该 NPC 在当前场景的对话脚本
             const res = await fetch(`/api/admin/dialog-scripts?npcId=${npc.id}&spotId=${spotId}`);
             const data = await res.json();
             if (data.success && data.scripts) {
@@ -1907,7 +1907,7 @@ function SpotNpcDialogEditor({ npc, spotId, worldName, spotName }: SpotNpcDialog
             {/* 对话脚本编辑 */}
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                    <h6 className="text-sm font-medium text-white/80">对话脚本（此景点）</h6>
+                    <h6 className="text-sm font-medium text-white/80">对话脚本（此场景）</h6>
                     {loadingDialogs && <span className="text-xs text-white/50">加载中...</span>}
                 </div>
                 {dialogTypes.map(({ type, label }) => {

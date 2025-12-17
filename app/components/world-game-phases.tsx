@@ -144,7 +144,7 @@ export function ExploringScreen({ spot, npc, isGeneratingDialog, onTalk, onNextS
           className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-6 py-3 rounded-xl text-base font-semibold cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_15px_30px_rgba(102,126,234,0.4)]"
           onClick={onNextSpot}
         >
-          ➡️ 前往下一站
+          ➡️ 前往下一个场景
         </button>
         <button
           className="bg-white/10 text-white border-2 border-white/30 px-6 py-3 rounded-xl text-base font-semibold cursor-pointer transition-all hover:bg-white/15 hover:border-white/50"

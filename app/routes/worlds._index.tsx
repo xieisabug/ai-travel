@@ -4,7 +4,7 @@ import { AuthModal, UserInfo } from '~/components/auth-modal';
 import { CurrencyDisplay } from '~/components/currency-display';
 import { DailyRewardToast } from '~/components/daily-reward-toast';
 import { useWorlds } from '~/hooks/use-worlds';
-import { useAuthContext, canGenerateWorld, getRemainingWorldGenerations } from '~/hooks/use-auth';
+import { useAuthContext } from '~/hooks/use-auth';
 import type { LoginResponse } from '~/types/user';
 
 export default function WorldsIndexPage() {
@@ -30,26 +30,6 @@ export default function WorldsIndexPage() {
     if (loginResponse?.dailyRewardClaimed && loginResponse?.dailyRewardAmount) {
       setDailyReward({ show: true, amount: loginResponse.dailyRewardAmount });
     }
-  };
-
-  const handleGenerateWorld = () => {
-    if (!isAuthenticated) {
-      openAuthModal('login');
-      return;
-    }
-
-    if (!canGenerateWorld(user)) {
-      alert('您没有生成世界的权限，请升级到 Pro 会员');
-      return;
-    }
-
-    const remaining = getRemainingWorldGenerations(user);
-    if (remaining <= 0) {
-      alert('您今日的世界生成次数已用完，请明天再试或升级会员');
-      return;
-    }
-
-    navigate('/worlds/generate');
   };
 
   const handleSelectWorld = (worldId: string) => {
@@ -135,20 +115,6 @@ export default function WorldsIndexPage() {
         )}
 
         <div className="text-center mb-8">
-          <button
-            className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-none px-8 py-4 rounded-full text-lg font-semibold cursor-pointer transition-all inline-flex items-center gap-2 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(102,126,234,0.4)] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-            onClick={handleGenerateWorld}
-            disabled={isGenerating}
-          >
-            {isGenerating ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                正在创造新世界...
-              </>
-            ) : (
-              '✨ 创造新世界'
-            )}
-          </button>
         </div>
 
         <div className="max-w-5xl mx-auto">
@@ -157,7 +123,7 @@ export default function WorldsIndexPage() {
           {worlds.length === 0 ? (
             <div className="text-center py-12 bg-white/5 rounded-2xl border border-white/10">
               <p className="text-white/50 mb-2">还没有发现任何世界</p>
-              <p className="text-white/50">点击上方按钮创造您的第一个异世界吧！</p>
+              <p className="text-white/50">请联系管理员创建世界后再来探索。</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -182,7 +148,7 @@ export default function WorldsIndexPage() {
                     <h3 className="text-indigo-400 font-semibold mb-2">{world.name}</h3>
                     <p className="text-white/60 text-sm mb-4 line-clamp-3 leading-relaxed">{world.description}</p>
                     <div className="flex justify-between items-center text-xs text-white/40">
-                      <span>{world.travelProjects?.length || 0} 个旅行项目</span>
+                      <span>{world.travelProjects?.length || 0} 个区域</span>
                       {world.travelVehicle && (
                         <span className="text-indigo-400">🚀 {world.travelVehicle.name}</span>
                       )}

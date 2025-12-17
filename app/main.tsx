@@ -8,7 +8,6 @@ import './app.css';
 import Home from './routes/home';
 import WorldsLayout from './routes/worlds';
 import WorldsIndexPage from './routes/worlds._index';
-import WorldsGeneratePage from './routes/worlds.generate';
 import WorldDetailPage from './routes/worlds.$worldId';
 import WorldGame from './routes/world-game';
 import AdminWorlds from './routes/admin/worlds';
@@ -25,7 +24,6 @@ function App() {
                     <Route path="/" element={<Home />} />
                     <Route path="/worlds" element={<WorldsLayout />}>
                         <Route index element={<WorldsIndexPage />} />
-                        <Route path="generate" element={<WorldsGeneratePage />} />
                         <Route path=":worldId" element={<WorldDetailPage />} />
                     </Route>
                     <Route path="/world-game" element={<WorldGame />} />
